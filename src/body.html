@@ -1,0 +1,61 @@
+<header>
+  <h1>Tractor–Soil Interaction Simulator <span class="badge b-ok">v2 · field-calibrated</span></h1>
+  <div class="sub">Brixius/ASABE D497.7 wheel-numeric model + whole-tractor load transfer + calibration to measured field cases, with Bekker–Wong cross-check, subsoil stress (SCSI) and compaction. Peeyush Soni, Dept. of Agricultural &amp; Food Engineering, IIT Kharagpur. Every number carries a source and verification status (see “Evidence”).</div>
+</header>
+<div class="wrap">
+<aside>
+  <div class="panel"><h2>1 · Tractor</h2>
+    <div class="row"><div><label>Mass, kg</label><input id="mass" type="number" value="4500" step="50"></div><div><label>Static rear share</label><input id="rearFrac" type="number" value="0.60" step="0.01" min="0.3" max="0.85"></div></div>
+    <div class="row"><div><label>Wheelbase, m</label><input id="wb" type="number" value="2.40" step="0.05"></div><div><label>Hitch height, m</label><input id="hd" type="number" value="0.55" step="0.05"></div></div>
+    <div class="row"><div><label>Drive</label><select id="drive"><option>2WD</option><option selected>MFWD</option><option>4WD</option></select></div><div><label>Front lead, %</label><input id="lead" type="number" value="3" step="0.5" min="-5" max="12"></div></div>
+    <h3>Rear tyres</h3>
+    <div class="row"><div><label>Size</label><select id="rearTyre"></select></div><div><label>Wheels on rear axle</label><select id="nRear"><option value="2">2 (single)</option><option value="4">4 (duals)</option></select></div></div>
+    <div class="row"><div><label>Inflation, kPa</label><input id="rearInfl" type="number" value="100" step="5"></div><div><label>Measured gross footprint, cm² (opt.)</label><input id="rearArea" type="number" placeholder="auto"></div></div>
+    <h3>Front tyres</h3>
+    <div class="row"><div><label>Size</label><select id="frontTyre"></select></div><div><label>Inflation, kPa</label><input id="frontInfl" type="number" value="140" step="5"></div></div>
+    <div class="row"><div><label>Measured footprint, cm² (opt.)</label><input id="frontArea" type="number" placeholder="auto"></div><div><label>Net pressure / inflation kp</label><input id="kp" type="number" value="1.3" step="0.05" min="1" max="1.9"></div></div>
+    <div class="row"><div><label>Lug-contact ratio (net/gross area)</label><input id="lug" type="number" value="0.6" step="0.05" min="0.4" max="1"></div><div></div></div>
+    <div class="note" style="margin-top:6px">Radial/bias is taken from the tyre-size list (radial → ASABE radial coefficients).</div>
+  </div>
+  <div class="panel"><h2>2 · Soil &amp; operation</h2>
+    <label>Soil state preset (ASABE D497.7 classes)</label><select id="ciPreset"></select>
+    <label>Cone index, 0–150 mm mean <span class="val" id="ciV"></span></label><input id="ci" type="range" min="200" max="2500" step="10" value="900">
+    <label>Drawbar pull required <span class="val" id="dpV"></span></label><input id="dp" type="range" min="0" max="40" step="0.1" value="10">
+    <label>Travel speed, km/h</label><input id="speed" type="number" value="7" step="0.5">
+    <h3>Subsoil / compaction</h3>
+    <div class="row"><div><label>Concentration ν</label><select id="nu"><option value="4">4 – hard/dry</option><option value="5" selected>5 – medium</option><option value="6">6 – soft/wet</option><option value="3">3 – Boussinesq</option></select></div><div><label>Subsoil strength @0.5 m, kPa</label><input id="strength" type="number" value="50" step="5"></div></div>
+    <label>Number of passes in same track</label><input id="passes" type="number" value="5" min="1" max="30">
+  </div>
+  <div class="panel"><h2>3 · Field calibration</h2>
+    <div class="row"><div><label>κ<sub>CI</sub> (effective CI multiplier)</label><input id="kCI" type="number" value="1" step="0.01" min="0.2" max="2"></div><div><label>κ<sub>ρ</sub> (rolling-resistance multiplier)</label><input id="kRho" type="number" value="1" step="0.01" min="0.2" max="2"></div></div>
+    <div style="margin:8px 0"><button class="sec" id="kText">Textbook (1, 1)</button> <button class="sec" id="kKim">Use Kim-2022 mean</button></div>
+    <h3>Calibrate to your own measurements</h3>
+    <div class="note">One row per field test of <b>this tractor</b>: cone index (kPa), drawbar pull (kN), rear slip (%), tractive efficiency (0–1, optional). Paste CSV, one row per line.</div>
+    <textarea id="csv" rows="4" style="width:100%;font:12px monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px" placeholder="CI,DP,slip,TE
+700,8.1,9.5,0.70
+560,10.1,13.4,0.68"></textarea>
+    <div style="margin-top:6px"><button id="fit">Fit κ to my data</button> <button class="sec" id="loadKim">Load Kim TX58 setup + cases</button></div>
+    <div id="fitOut" class="note" style="margin-top:6px"></div>
+  </div>
+</aside>
+<main>
+  <div class="panel" style="padding:8px 14px"><span id="calBadge"></span> <span class="note" id="calNote"></span><div id="alerts"></div></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="charts">
+    <div class="panel"><h2>Tractive efficiency &amp; pull vs rear slip</h2><canvas id="c1"></canvas><div class="legend" id="l1"></div>
+      <label><input type="checkbox" id="showMas" style="width:auto"> overlay Masiero 2011 surface means (drawbar/engine power ÷ driveline η)</label> <input id="etaD" type="number" value="0.88" step="0.01" style="width:70px"></div>
+    <div class="panel"><h2>Subsoil stress under the rear wheel</h2><canvas id="c2"></canvas><div class="legend" id="l2"></div></div>
+    <div class="panel"><h2>Axle loads &amp; traction split</h2><canvas id="c3"></canvas><div class="legend" id="l3"></div></div>
+    <div class="panel"><h2>Surface density vs passes (indicative)</h2><canvas id="c4"></canvas><div class="legend" id="l4"></div></div>
+  </div>
+  <div class="panel"><h2>Reality check — Kim et al. (2022) plough trials vs this model</h2><div id="valTab"></div><div class="note" id="valNote"></div></div>
+  <div class="panel"><h2>Independent cross-check — Bekker–Wong rigid-wheel theory (rear wheel)</h2>
+    <div class="row3"><div><label>Terrain parameters</label><select id="bekSel"></select></div><div><label>Slip for thrust, %</label><input id="bekS" type="number" value="15"></div><div></div></div><div id="bekOut"></div></div>
+  <div class="panel"><h2>Case-specific empirical slip estimator — Al-Dosary et al. (2023), 2WD plough</h2>
+    <div class="row3"><div><label>Implement</label><select id="adImp"><option value="chisel">Chisel</option><option value="moldboard" selected>Moldboard</option><option value="disk">Disk</option></select></div>
+    <div><label>Depth, cm</label><input id="adPD" type="number" value="20"></div><div><label>Speed, km/h</label><input id="adPS" type="number" value="4"></div></div>
+    <div class="row3"><div><label>Moisture, %db</label><input id="adMC" type="number" value="12.5"></div><div><label>Soil texture index STI</label><input id="adSTI" type="number" value="0.45" step="0.01"></div><div></div></div><div id="adOut"></div></div>
+  <div class="panel"><h2>Evidence &amp; sources</h2><div id="evid"></div></div>
+  <div class="panel"><h2>Model equations</h2><div id="eqs"></div></div>
+</main></div>
+<footer>MIT licence. Predictions are engineering estimates; calibrate to your own tractor and soil before design use. Textbook coefficients are for bias-ply (Brixius) and radial (ASABE) tyres on tilled/firm agricultural soils. See docs/ for derivations and limitations.</footer>

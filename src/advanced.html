@@ -1,0 +1,110 @@
+    <div class="sechead" style="margin-top:8px"><span class="tag">Advanced</span><h2>Field data, calibration and validation</h2></div>
+    <p class="secnote">The textbook model (κ = 1) is optimistic: on the three Kim et al. (2022) plough trials it under-predicted rear slip by 45–60 %. The calibration multipliers below absorb unmeasured axle loads, tyre deformation, tillage-induced soil state and test definitions. They are specific to the tractor and soil they were fitted on.</p>
+
+    <section class="panel adv" id="adv-cal">
+      <h3>1 · Calibration and contact-patch assumptions</h3>
+      <div class="row2" style="margin-top:8px">
+        <div class="field"><label for="kCI">κ<sub>CI</sub> · effective cone-index multiplier</label><input id="kCI" type="number" step="0.01" min="0.1" max="3" value="1"></div>
+        <div class="field"><label for="kRho">κ<sub>ρ</sub> · rolling-resistance multiplier</label><input id="kRho" type="number" step="0.01" min="0.1" max="3" value="1"></div>
+        <div class="field"><label for="kp">k<sub>p</sub> · net contact pressure / inflation</label><input id="kp" type="number" step="0.05" min="0.8" max="2.2" value="1.3"><small>1.0–1.9 reported; default is an assumption</small></div>
+        <div class="field"><label for="lug">Lug-contact ratio (net/gross footprint)</label><input id="lug" type="number" step="0.05" min="0.3" max="1" value="0.6"><small>assumption; sets tyre deflection δ/h</small></div>
+      </div>
+      <div class="chips" style="margin:10px 0">
+        <button class="chip" id="kText" type="button">Textbook (κ = 1)</button>
+        <button class="chip" id="kKim" type="button">Use Kim-2022 mean κ</button>
+        <button class="chip" id="kFitCase" type="button">Fit κ to the loaded field case</button>
+      </div>
+      <div id="cal-status"></div>
+      <h3 style="margin-top:14px">Fit to your own tests (this tractor)</h3>
+      <p class="note" style="margin-top:2px">One row per test: cone index mean 0–150 mm (kPa), drawbar pull (kN), rear slip (%), tractive efficiency 0–1 (optional). With 1–2 rows each test is fitted exactly and the mean is used; with 3 or more a global least-squares fit is made. Your points are plotted on the validation charts.</p>
+      <textarea id="csv" placeholder="CI,DP,slip,TE&#10;700,8.1,9.5,0.70&#10;560,10.1,13.4,0.68"></textarea>
+      <div class="chips" style="margin-top:8px"><button class="btn" id="fit" type="button">Fit κ to my data</button><button class="btn sec" id="csvClear" type="button">Clear</button></div>
+      <p class="note" id="fitOut"></p>
+    </section>
+
+    <section class="panel adv">
+      <h3>2 · Published field cases</h3>
+      <div class="row2" style="margin-top:8px;align-items:end">
+        <div class="field"><label for="caseSel">Case</label><select id="caseSel"></select></div>
+        <div class="field"><button class="btn" id="loadCase" type="button">Load case into the simulator</button></div>
+      </div>
+      <p class="note" id="case-note">Loads the test tractor, soil texture, moisture and the layer-wise cone index profile, then solves the slip for the measured drawbar pull (“Set drawbar pull” mode).</p>
+      <div class="tblwrap"><table id="caseTab"></table></div>
+    </section>
+
+    <section class="panel adv">
+      <div class="charthead"><h3>3 · Model against measured data</h3>
+        <div class="legend">
+          <span><i style="background:var(--ntr)"></i>Calibrated (current κ)</span>
+          <span><i style="background:var(--muted)"></i>Textbook κ = 1</span>
+          <span><svg width="14" height="14" viewBox="0 0 14 14" style="width:14px"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--fg)" stroke-width="2"/></svg>Kim 2022 (±SD)</span>
+          <span><svg width="14" height="14" viewBox="0 0 14 14" style="width:14px"><circle cx="7" cy="7" r="5" fill="var(--red)"/></svg>Your data</span>
+        </div></div>
+      <div class="cols">
+        <div><svg id="a1" viewBox="0 0 440 300" role="img" aria-label="Whole-tractor tractive efficiency versus rear slip with field data"></svg></div>
+        <div><svg id="a2" viewBox="0 0 440 300" role="img" aria-label="Whole-tractor drawbar pull versus rear slip with field data"></svg></div>
+      </div>
+      <label class="chk" for="showMas" style="margin-top:8px"><input type="checkbox" id="showMas"><span>Also show Masiero et al. (2011) surface means (4×2 TDA tractors, Brazil). Their efficiency is drawbar/engine power, so it is divided by an assumed driveline efficiency of</span></label>
+      <div style="max-width:120px"><input id="etaD" type="number" step="0.01" min="0.6" max="1" value="0.88"></div>
+      <div id="a-alerts"></div>
+    </section>
+
+    <section class="panel adv">
+      <h3>4 · Reality check: Kim et al. (2022) plough trials</h3>
+      <div class="tblwrap"><table id="valTab"></table></div>
+      <p class="note" id="valNote"></p>
+    </section>
+
+    <div class="sechead" style="margin-top:8px"><span class="tag">Advanced</span><h2>Subsoil stress, compaction and cross-checks</h2></div>
+    <section class="panel adv">
+      <h3>5 · Subsoil stress, SCSI and compaction (single wheel above)</h3>
+      <div class="row2" style="margin:8px 0">
+        <div class="field"><label for="strength">Subsoil strength at 0.5 m (kPa)</label><input id="strength" type="number" value="50" step="5" min="10"><small>Keller &amp; Or (2022): ~50 kPa for moist temperate soils; use measured precompression stress if available</small></div>
+        <div class="field"><label for="passes">Passes in the same track</label><input id="passes" type="number" value="5" min="1" max="30"></div>
+      </div>
+      <section class="kpis" id="kpis3"></section>
+      <div id="s-alerts"></div>
+      <div class="cols" style="margin-top:10px">
+        <div><svg id="a3" viewBox="0 0 440 300" role="img" aria-label="Vertical stress versus depth with concentration-factor bounds and strength limit"></svg></div>
+        <div><svg id="a4" viewBox="0 0 440 300" role="img" aria-label="Surface dry density versus number of passes"></svg></div>
+      </div>
+      <p class="note" id="s-note"></p>
+    </section>
+
+    <section class="panel adv">
+      <h3>6 · Independent cross-check: Bekker–Wong rigid-wheel theory (wheel above)</h3>
+      <div class="row2" style="margin:8px 0"><div class="field"><label for="bekSel">Terrain parameters</label><select id="bekSel"></select></div><div class="field"><label for="bekS">Slip for thrust (%)</label><input id="bekS" type="number" value="15" min="1" max="60"></div></div>
+      <div class="tblwrap"><table id="bekOut"></table></div>
+      <p class="note">Rigid-wheel theory uses terrain constants (n, k<sub>c</sub>, k<sub>φ</sub>, c, φ, K) rather than cone index and ignores tyre deflection, so expect order-of-magnitude agreement only. Terrain constants are textbook values (status: recalled — verify against your copy of Wong).</p>
+    </section>
+
+    <section class="panel adv">
+      <h3>7 · Case-specific empirical slip estimator: Al-Dosary et al. (2023), 2WD ploughing</h3>
+      <div class="row2" style="margin:8px 0">
+        <div class="field"><label for="adImp">Implement</label><select id="adImp"><option value="chisel">Chisel</option><option value="moldboard" selected>Moldboard</option><option value="disk">Disk</option></select></div>
+        <div class="field"><label for="adPD">Depth (cm)</label><input id="adPD" type="number" value="20"></div>
+        <div class="field"><label for="adPS">Speed (km/h)</label><input id="adPS" type="number" value="4" step="0.5"></div>
+        <div class="field"><label for="adMC">Moisture (% d.b.)</label><input id="adMC" type="number" value="12.5" step="0.5"></div>
+        <div class="field"><label for="adSTI">Soil texture index STI</label><input id="adSTI" type="number" value="0.45" step="0.01"></div>
+      </div>
+      <div id="adOut"></div>
+    </section>
+
+    <section class="panel adv">
+      <h3>8 · Export and scenarios</h3>
+      <div class="chips" style="margin-top:8px">
+        <button class="btn" id="expCsv" type="button">Download slip sweep (CSV)</button>
+        <button class="btn sec" id="expJson" type="button">Save scenario (JSON)</button>
+        <button class="btn sec" id="impJsonBtn" type="button">Load scenario…</button>
+        <input type="file" id="impJson" accept=".json,application/json" hidden>
+        <button class="btn sec" id="printBtn" type="button">Print / save as PDF</button>
+      </div>
+      <p class="note">The CSV lists whole-tractor and single-wheel results over 0–30 % slip together with every input and calibration factor, so a run can be reproduced.</p>
+    </section>
+
+    <section class="panel adv">
+      <h3>9 · Evidence and sources</h3>
+      <div class="tblwrap"><table id="evid" class="ev"></table></div>
+      <p class="note">Status: <span class="st-text">text</span> = number read from the open-access full text or a Project book; <span class="st-rec">recalled</span> = standard literature value not re-checked against a copy; <span class="st-ind">indicative</span> = assumed or fitted here. Items a source did not report are not filled in.</p>
+    </section>
+

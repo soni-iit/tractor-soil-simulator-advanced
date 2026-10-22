@@ -1,0 +1,1526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Advanced tractor–soil interaction simulator: corrected Brixius/ASABE traction, whole-tractor load transfer, field-data calibration, subsoil stress and compaction, Bekker–Wong cross-check, USDA texture, Atterberg limits, cone-index profile and Indian soil regions.">
+<meta name="author" content="Peeyush Soni">
+<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Tractor–Soil Interaction Simulator · Advanced</title>
+<style>
+/* Layout: tractor configuration, then soil panel (USDA triangle beside texture inputs), then sticky operating controls beside single-wheel and whole-tractor results. */
+:root{
+  --bg:#eef2f6; --surface:#ffffff; --fg:#13202c; --muted:#566a7c; --line:#d3dbe3; --grid:#e3e9ef;
+  --accent:#1a62c9; --accent-soft:#dbe8fb;
+  --firm:#1a62c9; --tilled:#b4601a; --sandy:#9a7b00;
+  --red:#c42b3b; --good:#1d7f48; --warn:#a9680b; --crit:#c42b3b;
+  --gtr:#1a62c9; --mrr:#b4601a; --ntr:#1d7f48;
+  --font-display:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d151d; --surface:#15202b; --fg:#e5ecf3; --muted:#92a5b6; --line:#2a3846; --grid:#1f2c39;
+  --accent:#5ea4ff; --accent-soft:#1b3350;
+  --firm:#5ea4ff; --tilled:#e5934d; --sandy:#dcbb3e;
+  --red:#ff6b7a; --good:#4cc38a; --warn:#e3b341; --crit:#ff6b7a;
+  --gtr:#5ea4ff; --mrr:#e5934d; --ntr:#4cc38a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d151d; --surface:#15202b; --fg:#e5ecf3; --muted:#92a5b6; --line:#2a3846; --grid:#1f2c39;
+  --accent:#5ea4ff; --accent-soft:#1b3350;
+  --firm:#5ea4ff; --tilled:#e5934d; --sandy:#dcbb3e;
+  --red:#ff6b7a; --good:#4cc38a; --warn:#e3b341; --crit:#ff6b7a;
+  --gtr:#5ea4ff; --mrr:#e5934d; --ntr:#4cc38a; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5;
+  padding-block:20px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;gap:6px 24px;align-items:baseline;justify-content:space-between}
+h1{font-family:var(--font-display);font-weight:700;font-size:clamp(24px,3.4vw,34px);letter-spacing:.2px;margin:0;line-height:1.1;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:62ch;min-width:0}
+.app{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.app{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;min-width:0}
+.controls{position:sticky;top:12px;display:flex;flex-direction:column;gap:14px}
+@media (max-width:900px){.controls{position:static}}
+h2{font-family:var(--font-display);font-weight:600;font-size:15px;letter-spacing:.8px;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+h3{font-family:var(--font-display);font-weight:600;font-size:18px;margin:0;letter-spacing:.2px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+button,select{font:inherit;color:var(--fg)}
+.chip{background:transparent;border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12.5px;cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg.two{grid-template-columns:repeat(2,1fr)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;font-size:13px;cursor:pointer;border-left:1px solid var(--line);text-align:center}
+.seg label:first-of-type{border-left:0}
+.seg input:checked+label{background:var(--accent-soft);font-weight:600}
+.seg input:disabled+label{opacity:.4;cursor:not-allowed}
+.seg input:focus-visible+label{outline:2px solid var(--accent);outline-offset:-2px}
+.dot{width:9px;height:9px;border-radius:50%;flex:none}
+.field{display:grid;gap:4px;align-content:start;min-width:0}
+.field .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.field label{font-size:13px}
+.field output{font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.field small{color:var(--muted);font-size:11.5px}
+input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
+select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+select:disabled{opacity:.6}
+.reset{align-self:flex-start;background:none;border:0;color:var(--accent);cursor:pointer;padding:0;font-size:13px;text-decoration:underline}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer}
+.chk input{margin-top:3px;accent-color:var(--accent)}
+
+/* tractor panel */
+.tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px 22px}
+.statics{margin:12px 0 0;font-size:12.5px;color:var(--muted)}
+.drivenote{min-height:2.6em}
+
+/* soil panel */
+.soil{display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr);gap:20px 28px;align-items:start}
+@media (max-width:820px){.soil{grid-template-columns:minmax(0,1fr)}}
+#tri{touch-action:none;cursor:crosshair;max-width:460px;margin:0 auto}
+.soilin{display:flex;flex-direction:column;gap:14px;min-width:0}
+.classline{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.classname{font-family:var(--font-display);font-weight:700;font-size:26px;line-height:1.1}
+.classline select{width:auto;min-width:170px}
+.sliders3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:560px){.sliders3{grid-template-columns:minmax(0,1fr)}}
+.sumline{font-size:12px;color:var(--muted)}
+.att{display:grid;gap:8px}
+.att h2{margin:0}
+.attrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.attrow div{background:var(--surface);padding:6px 8px;min-width:0}
+.attrow .l{display:block;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.attrow b{font-family:var(--font-mono);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
+.attnote{margin:0;font-size:12.5px;color:var(--muted)}
+.region{border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin-top:14px;background:var(--bg)}
+.region h2{margin:0 0 6px}
+.rname{font-family:var(--font-display);font-weight:700;font-size:20px;line-height:1.2}
+.rnote{margin:2px 0 8px;font-size:12.5px;color:var(--muted)}
+.scenebox svg{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:6px;margin-top:6px;font-family:var(--font-body)}
+.rmap{display:block;width:100%;max-width:260px;margin:6px auto 4px}
+.rmap .st{fill:#bfe6f8;stroke:#fff;stroke-width:.8;stroke-linejoin:round}
+.rmap .st.hi{fill:#d9822b;stroke:#fff}
+.rmap .st:hover{stroke:#333;stroke-width:1.2}
+.rlist{margin:0 0 8px;padding-left:18px;display:grid;gap:3px;font-size:13px}
+.rlist b{font-weight:600}
+.rlist span{color:var(--muted)}
+.region details{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+.region table td:last-child{white-space:normal;text-align:left}
+.region table td:first-child{vertical-align:top}
+.region .note a{color:var(--accent)}
+.cip{display:grid;gap:8px;margin-top:16px}
+.cip h2{margin:0}
+.ciin{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:560px){.ciin{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ciin label{display:grid;gap:2px;font-size:11.5px;color:var(--muted)}
+.ciin input{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--fg);font-family:var(--font-mono);font-size:13px}
+.cibtns{display:flex;gap:16px}
+
+.main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.sechead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin-bottom:-6px}
+.sechead h2{margin:0}
+.tag{display:inline-block;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:11.5px;letter-spacing:.7px;text-transform:uppercase;border-radius:4px;padding:2px 9px}
+.secnote{margin:0;font-size:12.5px;color:var(--muted)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.kpi{background:var(--surface);padding:10px 12px;min-width:0}
+.kpi .l{font-size:11.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+.kpi .v{font-family:var(--font-mono);font-size:22px;font-variant-numeric:tabular-nums;font-weight:500;line-height:1.25}
+.kpi .v span{font-size:12px;color:var(--muted);margin-left:3px}
+.kpi .h{font-size:11.5px;color:var(--muted)}
+.pill{display:inline-block;font-family:var(--font-body);font-size:11.5px;font-weight:600;border-radius:999px;padding:1px 8px;margin-left:6px;border:1px solid currentColor;vertical-align:middle}
+.pill.good{color:var(--good)}.pill.warn{color:var(--warn)}.pill.crit{color:var(--crit)}
+.advice{display:grid;gap:6px}
+.advice p{margin:0;padding:8px 12px;border-left:3px solid var(--line);background:var(--surface);border-radius:0 4px 4px 0}
+.advice p.good{border-color:var(--good)}.advice p.warn{border-color:var(--warn)}.advice p.crit{border-color:var(--crit)}
+.charthead{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:16px;height:3px;border-radius:2px}
+svg{display:block;width:100%;height:auto}
+svg.drag{cursor:ew-resize;touch-action:pan-y}
+svg text{font-family:var(--font-mono);font-size:11px;fill:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.cols{grid-template-columns:minmax(0,1fr)}}
+.note{color:var(--muted);font-size:12.5px;margin:8px 0 0}
+details{padding-top:0}
+summary{cursor:pointer;font-weight:600}
+.eq{display:grid;gap:6px;margin:10px 0;font-family:var(--font-mono);font-size:12.5px}
+.eq div{background:var(--bg);padding:6px 10px;border-radius:4px;overflow-x:auto;white-space:nowrap}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:500}
+footer{color:var(--muted);font-size:12px;max-width:100ch}
+.byline{margin-top:6px;font-size:13px;color:var(--muted)}
+.byline a,.cite a{color:var(--accent)}
+.cite{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin-bottom:12px;color:var(--fg);font-size:13px}
+.cite h2{margin:0 0 6px}
+.cite p{margin:0 0 8px}
+.cite button{background:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:12.5px;cursor:pointer;color:var(--accent)}
+@media (prefers-reduced-motion:no-preference){.pill,.chip{transition:border-color .15s,color .15s}}
+/* advanced additions */
+.adv input[type=number],.adv textarea,.controls input[type=number]{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--fg);font-family:var(--font-mono);font-size:13px}
+.adv textarea{min-height:84px}
+.btn{background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer}
+.btn.sec{background:transparent;color:var(--accent)}
+.row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px 16px}
+.alert{border-left:3px solid var(--warn);background:var(--surface);padding:8px 12px;border-radius:0 4px 4px 0;margin:6px 0;font-size:13px}
+.alert.crit{border-color:var(--crit)}.alert.good{border-color:var(--good)}
+.st-text{color:var(--good)}.st-rec{color:var(--warn)}.st-ind{color:var(--crit)}
+.ev td{white-space:normal;text-align:left;vertical-align:top}
+.legend svg{display:inline-block}
+.panel.adv h3{font-size:16px}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Tractor–Soil Interaction Simulator <span class="tag" style="vertical-align:middle">Advanced</span></h1>
+    <div class="byline">Peeyush Soni · Department of Agricultural and Food Engineering, IIT Kharagpur · <a href="https://doi.org/10.5281/zenodo.23560841" target="_blank" rel="noopener">DOI 10.5281/zenodo.23560841</a></div>
+  </div>
+  <p>Pick a tractor and tyres, set the soil from texture, moisture and a measured cone-index profile, then run the model with a chosen slip or a required drawbar pull. Results are shown for one wheel and for the whole tractor, checked against published field data and calibratable to your own tests.</p>
+</header>
+
+<section class="panel" aria-label="Tractor configuration">
+  <h2>Tractor configuration</h2>
+  <div class="tgrid">
+    <div class="field"><label for="tractorLib">Tractor library</label><select id="tractorLib"></select><small id="lib-note">Class presets are indicative; replace with your tractor's weighed axle loads.</small></div>
+    <div class="field">
+      <label>Drive type</label>
+      <div class="seg" role="radiogroup" aria-label="Drive type">
+        <input type="radio" name="drive" id="drive-2wd" value="2wd" checked><label for="drive-2wd">2WD</label>
+        <input type="radio" name="drive" id="drive-mfwd" value="mfwd"><label for="drive-mfwd">MFWD</label>
+        <input type="radio" name="drive" id="drive-4wd" value="4wd"><label for="drive-4wd">4WD</label>
+      </div>
+      <small class="drivenote" id="drive-note"></small>
+    </div>
+    <div class="field"><label for="rearTyre">Rear tyre (driven)</label><select id="rearTyre"></select><small>Bias-ply Indian sizes and radial (metric) sizes</small></div>
+    <div class="field"><label for="frontTyre" id="front-label">Front tyre</label><select id="frontTyre"></select><small>Sizes for this drive type (4WD may differ from rear)</small></div>
+    <div class="field"><div class="row"><label for="mass">Tractor mass with ballast</label><output id="o-mass"></output></div>
+      <input type="range" id="mass" min="600" max="6000" step="1" value="1900"></div>
+    <div class="field"><div class="row"><label for="fr">Static weight on rear axle</label><output id="o-fr"></output></div>
+      <input type="range" id="fr" min="35" max="80" step="1" value="65"></div>
+    <div class="field"><div class="row"><label for="wb">Wheelbase</label><output id="o-wb"></output></div>
+      <input type="range" id="wb" min="1.4" max="3.2" step="0.05" value="1.95"></div>
+    <div class="field"><div class="row"><label for="hd">Drawbar hitch height</label><output id="o-hd"></output></div>
+      <input type="range" id="hd" min="0.2" max="0.8" step="0.01" value="0.45"></div>
+    <div class="field"><div class="row"><label for="inflR">Rear inflation pressure</label><output id="o-inflR"></output></div>
+      <input type="range" id="inflR" min="40" max="240" step="5" value="100"></div>
+    <div class="field"><div class="row"><label for="inflF">Front inflation pressure</label><output id="o-inflF"></output></div>
+      <input type="range" id="inflF" min="40" max="300" step="5" value="200"></div>
+    <div class="field" id="leadwrap" hidden><div class="row"><label for="lead">Front-wheel lead</label><output id="o-lead"></output></div>
+      <input type="range" id="lead" min="0" max="6" step="0.5" value="2"><small>Front theoretical speed above rear</small></div>
+  </div>
+  <p class="statics" id="statics"></p>
+</section>
+
+<section class="panel soil" aria-label="Soil texture">
+  <div>
+    <h2>USDA texture triangle</h2>
+    <svg id="tri" viewBox="0 0 440 372" role="img" aria-label="USDA soil texture triangle. Click or drag to set sand, silt and clay."></svg>
+    <p class="note">Click or drag inside the triangle to set the texture. Marker shows the current composition.</p>
+    <div class="region" aria-live="polite">
+      <h2>Typical Indian regions for this class</h2>
+      <div class="rname"><span id="r-name"></span> <span class="pill good" id="r-tag"></span></div>
+      <p class="rnote" id="r-note"></p>
+      <svg id="r-map" class="rmap" viewBox="0 0 560 640" role="img" aria-label="Map of India with the states for the selected soil class highlighted"></svg>
+      <p class="rnote">Highlighted: states listed for this class. Map shows India with the full Jammu and Kashmir and Ladakh territory (Survey of India depiction; boundary data from DataMeet).</p>
+      <ul class="rlist" id="r-list"></ul>
+      <p class="note">Indicative only. See the regional notes at the bottom of the page.</p>
+    </div>
+    <div class="cip">
+      <h2>Cone index with depth</h2>
+      <label class="chk" for="useci"><input type="checkbox" id="useci"><span>Use my measured profile (optional). Without it, cone index is estimated from texture, moisture and consistency.</span></label>
+      <div id="ci-inputs" hidden>
+        <div class="ciin" id="ci-grid"></div>
+        <div class="cibtns" style="margin-top:8px">
+          <button class="reset" id="ci-fill" type="button">Fill from model</button>
+          <button class="reset" id="ci-clear" type="button">Clear</button>
+        </div>
+      </div>
+      <svg id="ci-svg" viewBox="0 0 440 236" role="img" aria-label="Cone index versus depth"></svg>
+      <p class="attnote" id="ci-note"></p>
+    </div>
+  </div>
+  <div class="soilin">
+    <div class="classline">
+      <div><div class="sumline">USDA texture class</div><div class="classname" id="usda-name"></div></div>
+      <div><label class="sumline" for="quick">Quick pick (typical composition)</label><select id="quick"></select></div>
+    </div>
+    <div class="sliders3">
+      <div class="field"><div class="row"><label for="sand">Sand</label><output id="o-sand"></output></div><input type="range" id="sand" min="0" max="100" step="1" value="40"></div>
+      <div class="field"><div class="row"><label for="silt">Silt</label><output id="o-silt"></output></div><input type="range" id="silt" min="0" max="100" step="1" value="40"></div>
+      <div class="field"><div class="row"><label for="clay">Clay</label><output id="o-clay"></output></div><input type="range" id="clay" min="0" max="100" step="1" value="20"></div>
+    </div>
+    <div class="sumline">The three fractions always sum to 100 %. Moving one rescales the other two in proportion.</div>
+    <div>
+      <h2>Surface condition</h2>
+      <div class="seg" role="radiogroup" aria-label="Surface condition">
+        <input type="radio" name="cond" id="cond-firm" value="firm" checked><label for="cond-firm"><span class="dot" style="background:var(--firm)"></span>Firm</label>
+        <input type="radio" name="cond" id="cond-tilled" value="tilled"><label for="cond-tilled"><span class="dot" style="background:var(--tilled)"></span>Tilled</label>
+        <input type="radio" name="cond" id="cond-loose" value="loose"><label for="cond-loose"><span class="dot" style="background:var(--sandy)"></span>Loose</label>
+      </div>
+    </div>
+    <div class="field"><div class="row"><label for="moist">Soil moisture (d.b.)</label><output id="o-moist"></output></div>
+      <input type="range" id="moist" min="3" max="50" step="0.5" value="16"><small id="moist-note"></small></div>
+    <div class="att">
+      <h2>Atterberg consistency limits</h2>
+      <svg id="att-svg" viewBox="0 0 440 112" role="img" aria-label="Atterberg consistency scale with the current moisture marked"></svg>
+      <div class="attrow" id="att-row"></div>
+      <p class="attnote" id="att-note"></p>
+    </div>
+    <div class="tblwrap"><table id="ptable"></table></div>
+    <div class="scenebox">
+      <h2>Field view: soil, tractor and axle loads</h2>
+      <svg id="scene" viewBox="0 0 640 460" role="img" aria-label="Side view of the tractor on the selected soil, with highlighted driving and free-rolling tyres and arrows for front and rear axle loads"></svg>
+      <p class="attnote" id="scene-note"></p>
+    </div>
+  </div>
+</section>
+
+<div class="app">
+  <aside class="panel controls" aria-label="Operating inputs">
+    <div>
+      <h2>Operating scenarios (optional)</h2>
+      <div class="chips" id="scen">
+        <button class="chip" data-s="dry">Dry firm stubble</button>
+        <button class="chip" data-s="wet">Wet, above plastic limit</button>
+        <button class="chip" data-s="seed">Tilled seedbed</button>
+        <button class="chip" data-s="soft">Soft ground, low pressure</button>
+      </div>
+      <small style="display:block;margin-top:6px;color:var(--muted);font-size:11.5px">Keeps your tractor and soil texture. Sets surface condition, moisture, slip, speed and rear inflation.</small>
+    </div>
+
+    <div class="field"><div class="row"><label for="slip">Rear wheel slip, s<sub>r</sub></label><output id="o-slip"></output></div>
+      <input type="range" id="slip" min="0" max="30" step="0.5" value="10"><small>Front slip follows from lead on MFWD</small></div>
+
+    <div class="field"><div class="row"><label for="speed">Theoretical speed, v<sub>t</sub></label><output id="o-speed"></output></div>
+      <input type="range" id="speed" min="2" max="12" step="0.5" value="7"></div>
+
+    <div>
+      <h2>Operating mode</h2>
+      <div class="seg two" role="radiogroup" aria-label="Operating mode">
+        <input type="radio" name="mode" id="mode-slip" value="slip" checked><label for="mode-slip">Set slip</label>
+        <input type="radio" name="mode" id="mode-draft" value="draft"><label for="mode-draft">Set drawbar pull</label>
+      </div>
+      <div class="field" id="dpwrap" hidden style="margin-top:8px"><div class="row"><label for="dpTarget">Required drawbar pull</label><output id="o-dp"></output></div>
+        <input type="range" id="dpTarget" min="0" max="40" step="0.1" value="8"><small>The model solves the rear slip that delivers this pull (inverse problem).</small></div>
+    </div>
+
+    <div>
+      <h2>Single wheel to analyse</h2>
+      <div class="seg two" role="radiogroup" aria-label="Wheel to analyse">
+        <input type="radio" name="wheel" id="wheel-rear" value="rear" checked><label for="wheel-rear">Rear</label>
+        <input type="radio" name="wheel" id="wheel-front" value="front"><label for="wheel-front">Front (driven)</label>
+      </div>
+    </div>
+
+    <div class="field"><div class="row"><label for="load">Load on this wheel, W</label><output id="o-load"></output></div>
+      <input type="range" id="load" min="2" max="40" step="0.1" value="6">
+      <label class="chk" for="autoload"><input type="checkbox" id="autoload" checked><span>Use dynamic load from the tractor</span></label></div>
+    <button class="reset" id="reset" type="button">Reset to defaults</button>
+  </aside>
+
+  <main class="main">
+    <div class="sechead"><span class="tag">Single driving wheel</span><h2 id="sw-title"></h2></div>
+    <p class="secnote">The numbers and charts in this block describe one driving wheel only, not the whole tractor. The whole-tractor estimate is in the next block.</p>
+    <section class="kpis" id="kpis" aria-live="polite"></section>
+    <section class="advice" id="advice" aria-live="polite"></section>
+
+    <div class="sechead" style="margin-top:8px"><span class="tag">Whole tractor</span><h2 id="wt-title"></h2></div>
+    <p class="secnote">Estimated from the tractor configuration above, with dynamic weight transfer to the rear axle. Both axles work in the same soil.</p>
+    <section class="kpis" id="kpis2" aria-live="polite"></section>
+    <section class="advice" id="advice2" aria-live="polite"></section>
+    <section class="panel">
+      <div class="charthead"><h3>Whole tractor against rear-wheel slip</h3>
+        <div class="legend">
+          <span><i style="background:var(--gtr)"></i>Pull–weight ratio, DP / W</span>
+          <span><i style="background:var(--ntr)"></i>Tractive efficiency</span>
+        </div></div>
+      <svg id="c5" viewBox="0 0 640 300" role="img" aria-label="Whole-tractor pull-weight ratio and tractive efficiency versus rear wheel slip"></svg>
+      <p class="note">Drag on this chart to set slip.</p>
+    </section>
+
+    <div class="sechead" style="margin-top:8px"><span class="tag">Single driving wheel</span><h2>Detailed charts</h2></div>
+    <section class="panel">
+      <div class="charthead"><h3>Tractive efficiency against slip, <span id="c1name"></span></h3>
+        <div class="legend">
+          <span><i style="background:var(--firm)"></i>Firm</span>
+          <span><i style="background:var(--tilled)"></i>Tilled</span>
+          <span><i style="background:var(--sandy)"></i>Loose</span>
+          <span><svg width="14" height="14" viewBox="0 0 14 14" style="width:14px"><circle cx="7" cy="7" r="6" fill="var(--red)"/></svg>Optimum slip</span>
+        </div></div>
+      <svg id="c1" viewBox="0 0 640 340" role="img" aria-label="Tractive efficiency versus wheel slip for three surface conditions"></svg>
+      <p class="note">Single wheel at the load shown above. Drag on this chart to set slip. Shaded zone: left of the optimum, power is limited by motion resistance. Right of it, power is lost to wheel slip.</p>
+    </section>
+
+    <section class="panel">
+      <div class="charthead"><h3>Traction ratios, single wheel, selected condition</h3>
+        <div class="legend">
+          <span><i style="background:var(--gtr)"></i>Gross traction ratio</span>
+          <span><i style="background:var(--mrr)"></i>Motion resistance ratio</span>
+          <span><i style="background:var(--ntr)"></i>Net traction ratio</span>
+        </div></div>
+      <svg id="c2" viewBox="0 0 640 300" role="img" aria-label="Gross traction, motion resistance and net traction ratios versus slip"></svg>
+    </section>
+
+    <div class="cols">
+      <section class="panel">
+        <div class="charthead"><h3>Subsoil stress, single wheel</h3></div>
+        <svg id="c3" viewBox="0 0 320 320" role="img" aria-label="Vertical stress under the wheel versus depth"></svg>
+        <p class="note" id="c3note"></p>
+      </section>
+      <section class="panel">
+        <div class="charthead"><h3>Rut depth, single wheel</h3></div>
+        <svg id="c4" viewBox="0 0 320 150" role="img" aria-label="Rut depth schematic"></svg>
+        <p class="note" id="c4note"></p>
+      </section>
+    </div>
+
+/*@@ADVHTML@@*/
+    <section class="panel">
+      <details open>
+        <summary>Model equations</summary>
+        <div class="eq">
+          <div>B<sub>n</sub> = (CI·b·d / W) · (1 + 5δ/h) / (1 + 3b/d)</div>
+          <div>Bias ply: GTR = 0.88 (1 − e<sup>−0.1 B<sub>n</sub></sup>)(1 − e<sup>−7.5 s</sup>) + 0.04</div>
+          <div>Radial: GTR = 0.88 (1 − e<sup>−0.1 B<sub>n</sub></sup>)(1 − e<sup>−9.5 s</sup>) + 0.0325</div>
+          <div>Bias ply: MRR = 1 / B<sub>n</sub> + 0.04 + 0.5 s / √B<sub>n</sub> &nbsp;&nbsp; Radial: MRR = 0.9 / B<sub>n</sub> + 0.0325 + 0.5 s / √B<sub>n</sub></div>
+          <div>Calibration: CI → κ<sub>CI</sub>·CI in B<sub>n</sub>, MRR → κ<sub>ρ</sub>·MRR &nbsp;&nbsp; (κ = 1 is the textbook model)</div>
+          <div>NTR = GTR − MRR &nbsp;&nbsp; TE = NTR (1 − s) / GTR</div>
+          <div>z = [ p<sub>c</sub> / (k<sub>c</sub>/b + k<sub>φ</sub>) ]<sup>1/n</sup> · (1 + 4s)</div>
+          <div>σ<sub>z</sub> = p<sub>c</sub> [ 1 − (1 / (1 + a²/z²))<sup>ν/2</sup> ]</div>
+        </div>
+        <p class="note">Single wheel: Brixius (1987) wheel-numeric traction model (basis of ASABE D497.7), with the bias-ply and radial coefficient sets, a Bekker pressure–sinkage relation for rut depth and a Fröhlich concentration-factor form for subsoil stress. B<sub>n</sub> uses the load on one wheel with that tyre's width b and diameter d. Contact patch: net contact pressure p<sub>c</sub> = k<sub>p</sub>·inflation (k<sub>p</sub> default 1.3), gross footprint A<sub>g</sub> = W/(p<sub>c</sub>·lug ratio) (lug ratio default 0.6), contact length L = A<sub>g</sub>/(πb/4), tyre deflection from the chord relation L = 2√(dδ − δ²) giving δ/h; a measured footprint can replace the estimate. Stress is computed on the net area, a = √(A/π). Version 3 corrects the rolling-resistance term used in version 1 (1.2/B<sub>n</sub> → 1/B<sub>n</sub>) and replaces the fitted deflection relation.</p>
+        <div class="eq">
+          <div>W<sub>r</sub> = W<sub>r0</sub> + DP·h<sub>d</sub>/L &nbsp;&nbsp; W<sub>f</sub> = W<sub>f0</sub> − DP·h<sub>d</sub>/L</div>
+          <div>2WD: DP = W<sub>r</sub>·NTR<sub>r</sub> − W<sub>f</sub>·MRR<sub>f</sub>(s = 0)</div>
+          <div>MFWD, 4WD: DP = W<sub>r</sub>·NTR<sub>r</sub> + W<sub>f</sub>·NTR<sub>f</sub></div>
+          <div>s<sub>f</sub> = 1 − (1 − s<sub>r</sub>) / (1 + lead)</div>
+          <div>η = DP·v<sub>a</sub> / Σ(GTR·W·v<sub>t</sub>) &nbsp;&nbsp; v<sub>a</sub> = v<sub>t</sub>(1 − s<sub>r</sub>)</div>
+        </div>
+        <p class="note">Whole tractor: static axle loads come from the tractor mass and rear weight share, and the pull shifts load rearward by DP·h<sub>d</sub>/L (the drawbar pull is taken as horizontal, and tractor rolling-moment terms are ignored). On 2WD the front wheels roll freely and only add motion resistance. On MFWD the front wheels drive with a positive lead, so they slip more than the rear wheels. The 4WD option uses equal tyres on both axles with no lead. Front wheels are assumed to run in undisturbed soil, so rear wheels running in front-wheel ruts are not modelled. Front tyre options and default masses are typical values, not manufacturer data.</p>
+        <p class="note">Texture to parameters: cone index at the reference moisture rises with clay and silt, CI<sub>ref</sub> = 900 + 15·clay + 4·silt (kPa, firm surface). The Bekker exponent falls and k<sub>c</sub> rises with clay, and moisture lowers CI exponentially at a rate that grows with clay and silt. Tilled and loose surfaces carry 0.5 and 0.28 of the firm cone index. Reference moisture (near field capacity) is 6 + 0.35·clay + 0.1·silt in % d.b.</p>
+        <p class="note">Atterberg limits are estimated from texture: PI = 0.65·clay + 0.06·silt − 2 (below 4 the soil is treated as non-plastic), PL = 12 + 0.22·clay + 0.10·silt, LL = PL + PI, SL = 0.55·PL, all in % d.b. Liquidity index LI = (w − PL)/PI. The limits classify the soil state and drive the warnings. They also scale the cone index: CI = CI<sub>ref</sub> · f<sub>m</sub> · f<sub>a</sub>, where f<sub>m</sub> = exp[−β(w − w<sub>FC</sub>)] limited to 0.4–2.0, and f<sub>a</sub> = 1 up to the plastic limit, falling linearly to 0.3 at the liquid limit (LI = 1) and decaying toward zero above it. Non-plastic soils keep f<sub>a</sub> = 1. A measured cone-index profile replaces this estimate: its mean over 0–150 mm is used as CI for the selected surface condition, and the other two conditions are scaled by their firm, tilled and loose ratios.</p>
+      </details>
+    </section>
+  </main>
+</div>
+<footer>
+<div class="cite region" id="regions-notes">
+  <h2>Indian regions by USDA class: all 12 classes and notes</h2>
+<details>
+    <summary>All 12 classes</summary>
+    <div class="tblwrap" style="margin-top:8px"><table id="r-table"></table></div>
+  </details>
+<p class="note">Indicative only. States have several textures. These assignments follow the broad soil groups (alluvial, black, red, laterite, arid) and typical surface texture, not a measured class map. Crops in brackets are the major crops grown on that soil. For comparison, an NBSS&amp;LUP (ICAR) regional study of Tamil Nadu found sandy textures (sandy loam, loamy sand) dominant, followed by clayey and loamy soils (<a href="https://www.fao.org/fileadmin/user_upload/GSP/GSID24/Posters/Theme_2/GSP-DSM-Surface_texture-Dr._Kalaiselvi._B.pdf" target="_blank" rel="noopener">Kalaiselvi et al.</a>). NBSS&amp;LUP has also announced a national soil texture map (<a href="https://www.drishtiias.com/state-pcs-current-affairs/nbss-lup-develops-indias-first-soil-texture-map" target="_blank" rel="noopener">report</a>), which would give hectare-level classes.</p>
+</div>
+<div class="cite">
+  <h2>How to cite</h2>
+  <p id="citetext">Soni, P. (2026). Tractor–Soil Interaction Simulator, Advanced version 3 [Computer software]. Based on the basic version: Zenodo. https://doi.org/10.5281/zenodo.23560841</p>
+  <p>Author: Peeyush Soni, Department of Agricultural and Food Engineering, Indian Institute of Technology Kharagpur. Released under the MIT licence. Source code: <a href="https://github.com/soni-iit/tractor-soil-simulator" target="_blank" rel="noopener">github.com/soni-iit/tractor-soil-simulator</a>.</p>
+  <button type="button" id="copycite">Copy citation</button>
+</div>
+Engineering estimate calibrated to a small set of published field trials (see the Evidence table). The texture-to-parameter relations are simple correlations built from representative terramechanics values (Wong, Terramechanics): use measured cone index and calibrate κ to your own tractor and soil for design or publication. Tractor-library entries other than the TX58 are class values, not specific models. The whole-tractor block is a simplified static-plus-load-transfer estimate.</footer>
+</div>
+
+<script>
+/*@@MODEL@@*/
+</script>
+<script>
+/*@@DATA@@*/
+</script>
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id)};
+  var fmt = function(x,d){return Number(x).toFixed(d)};
+  var clamp = function(x,a,b){return Math.max(a,Math.min(b,x))};
+  var TSM = window.TSM, TSMDATA = window.TSMDATA;
+  /* calibration & contact-patch assumptions shared by all model functions (see Calibration panel) */
+  var CAL = {kCI:1, kRho:1, kp:1.3, lug:0.6};
+
+  /* ---------- USDA texture ---------- */
+  var CLASSES = [
+    {n:"Sand",            a:"S",    t:[92,5,3],    p:[[100,0],[85,0],[90,10]]},
+    {n:"Loamy sand",      a:"LS",   t:[82,12,6],   p:[[85,0],[70,0],[85,15],[90,10]]},
+    {n:"Sandy loam",      a:"SL",   t:[65,25,10],  p:[[70,0],[50,0],[43,7],[52,7],[52,20],[80,20],[85,15]]},
+    {n:"Loam",            a:"L",    t:[40,40,20],  p:[[43,7],[52,7],[52,20],[45,27],[23,27]]},
+    {n:"Silt loam",       a:"SiL",  t:[20,65,15],  p:[[50,0],[20,0],[8,12],[0,12],[0,27],[23,27],[43,7]]},
+    {n:"Silt",            a:"Si",   t:[8,87,5],    p:[[20,0],[0,0],[0,12],[8,12]]},
+    {n:"Sandy clay loam", a:"SCL",  t:[60,13,27],  p:[[80,20],[52,20],[45,27],[45,35],[65,35]]},
+    {n:"Clay loam",       a:"CL",   t:[33,34,33],  p:[[45,27],[20,27],[20,40],[45,40]]},
+    {n:"Silty clay loam", a:"SiCL", t:[10,56,34],  p:[[20,27],[0,27],[0,40],[20,40]]},
+    {n:"Sandy clay",      a:"SC",   t:[52,6,42],   p:[[65,35],[45,35],[45,55]]},
+    {n:"Silty clay",      a:"SiC",  t:[6,47,47],   p:[[0,40],[20,40],[0,60]]},
+    {n:"Clay",            a:"C",    t:[22,20,58],  p:[[20,40],[45,40],[45,55],[0,100],[0,60]]}
+  ];
+  function classify(sa,si,cl){
+    var n;
+    if (si+1.5*cl<15) n="Sand";
+    else if (si+1.5*cl>=15 && si+2*cl<30) n="Loamy sand";
+    else if ((cl>=7 && cl<20 && sa>52 && si+2*cl>=30) || (cl<7 && si<50 && si+2*cl>=30)) n="Sandy loam";
+    else if (cl>=7 && cl<27 && si>=28 && si<50 && sa<=52) n="Loam";
+    else if ((si>=50 && cl>=12 && cl<27) || (si>=50 && si<80 && cl<12)) n="Silt loam";
+    else if (si>=80 && cl<12) n="Silt";
+    else if (cl>=20 && cl<35 && si<28 && sa>45) n="Sandy clay loam";
+    else if (cl>=27 && cl<40 && sa>20 && sa<=45) n="Clay loam";
+    else if (cl>=27 && cl<40 && sa<=20) n="Silty clay loam";
+    else if (cl>=35 && sa>45) n="Sandy clay";
+    else if (cl>=40 && si>=40) n="Silty clay";
+    else if (cl>=40 && sa<=45 && si<40) n="Clay";
+    else n="Loam";
+    for (var i=0;i<CLASSES.length;i++) if (CLASSES[i].n===n) return i;
+    return 3;
+  }
+
+  /* ---------- tyres (typical Indian tractor sizes, bias ply) ---------- */
+  function mk(label, w, rim, ar, id){
+    return {label:label, id:id||label, w:w, rim:rim, ar:ar, b:w*0.0254, d:(rim+2*ar*w)*0.0254, radial:false};
+  }
+  // radial tyres in metric designation: section width [mm], aspect ratio [%], rim [in]
+  function mkR(sw, arPct, rim, id){
+    var b = sw/1000, h = b*arPct/100, lab = sw+"/"+arPct+"R"+rim;
+    return {label:lab, id:id||lab, w:sw/25.4, rim:rim, ar:arPct/100, b:b, d:rim*0.0254+2*h, radial:true};
+  }
+  var REAR_GROUPS = [
+    {g:"Mini / small tractor", t:[mk("8.00-18",8.0,18,.85), mk("8.3-20",8.3,20,.85), mk("9.5-20",9.5,20,.85)]},
+    {g:"Compact tractor", t:[mk("8.3-24",8.3,24,.85), mk("9.5-24",9.5,24,.85), mk("11.2-24",11.2,24,.85), mk("12.4-24",12.4,24,.85), mk("14.9-24",14.9,24,.85)]},
+    {g:"Standard tractor", t:[mk("11.2-28",11.2,28,.85), mk("12.4-28",12.4,28,.85), mk("13.6-28",13.6,28,.85), mk("14.9-28",14.9,28,.85), mk("15.9-28",15.9,28,.85), mk("16.9-28",16.9,28,.85), mk("17.9-28",17.9,28,.85)]},
+    {g:"Large tractor", t:[mk("14.9-30",14.9,30,.85), mk("16.9-30",16.9,30,.85), mk("18.4-30",18.4,30,.85), mk("18.4-34",18.4,34,.85), mk("20.8-38",20.8,38,.85), mk("23.1-30",23.1,30,.85)]},
+    {g:"Radial (metric)", t:[mkR(420,85,30), mkR(480,70,34), mkR(520,85,38), mkR(650,65,42)]},
+    {g:"Specialized agricultural tractor", t:[mk("8.3-32",8.3,32,.85), mk("12.4-32",12.4,32,.85), mk("13.6-38",13.6,38,.85), mk("15.5-38",15.5,38,.85), mk("16.9-38",16.9,38,.85)]}
+  ];
+  var FRONT_2WD = [mk("5.00-15",5.0,15,.9,"2wd|5.00-15"), mk("6.00-16",6.0,16,.9,"2wd|6.00-16"), mk("6.50-16",6.5,16,.9,"2wd|6.50-16"), mk("7.50-16",7.5,16,.9,"2wd|7.50-16"), mk("7.50-18",7.5,18,.9,"2wd|7.50-18")];
+  var FRONT_MFWD = [mk("7.50-16",7.5,16,.85,"mfwd|7.50-16"), mk("8.3-20",8.3,20,.85,"mfwd|8.3-20"), mk("8.3-24",8.3,24,.85,"mfwd|8.3-24"), mk("9.5-24",9.5,24,.85,"mfwd|9.5-24"), mk("11.2-24",11.2,24,.85,"mfwd|11.2-24"), mk("12.4-24",12.4,24,.85,"mfwd|12.4-24"), mk("13.6-24",13.6,24,.85,"mfwd|13.6-24")];
+  var FRONT_4WD = [mk("11.2-20",11.2,20,.85,"4wd|11.2-20"), mk("11.2-24",11.2,24,.85,"4wd|11.2-24"), mk("13.6-24",13.6,24,.85,"4wd|13.6-24"), mk("14.9-24",14.9,24,.85,"4wd|14.9-24"), mkR(340,85,24,"4wd|340/85R24"), mkR(420,70,28,"4wd|420/70R28"), mkR(540,65,30,"4wd|540/65R30")];
+  var ALL_TYRES = [];
+  REAR_GROUPS.forEach(function(g){ ALL_TYRES = ALL_TYRES.concat(g.t); });
+  ALL_TYRES = ALL_TYRES.concat(FRONT_2WD, FRONT_MFWD, FRONT_4WD);
+  function tyreByKey(k){
+    for (var i=0;i<ALL_TYRES.length;i++) if (ALL_TYRES[i].id===k) return ALL_TYRES[i];
+    return ALL_TYRES[0];
+  }
+  var optText = function(t){ return t.label+" · b "+Math.round(t.b*1000)+" mm · d "+fmt(t.d,2)+" m"; };
+  var optHtml = function(t){ return '<option value="'+t.id+'">'+optText(t)+'</option>'; };
+
+  var DRIVES = {
+    "2wd": {mass:1900, fr:65, wb:1.95, lead:0, inflF:200, frontTyre:"2wd|6.00-16",
+            note:"Rear wheels drive. Front wheels roll freely and add motion resistance."},
+    "mfwd":{mass:2300, fr:58, wb:2.0,  lead:2, inflF:150, frontTyre:"mfwd|9.5-24",
+            note:"Rear wheels drive and the smaller front wheels assist, with a positive lead."},
+    "4wd": {mass:2600, fr:50, wb:2.1,  lead:0, inflF:100, frontTyre:"same",
+            note:"All four wheels drive with equal tyres and no lead."}
+  };
+
+  /* ---------- texture to soil parameters ---------- */
+  var CONDS = {
+    firm:  {name:"Firm",   color:"var(--firm)",  mult:1.0,  nu:4},
+    tilled:{name:"Tilled", color:"var(--tilled)",mult:0.5,  nu:5},
+    loose: {name:"Loose",  color:"var(--sandy)", mult:0.28, nu:5}
+  };
+  function soilFor(S, ck){
+    var si=S.silt, cl=S.clay, c=CONDS[ck];
+    var CI0 = 900 + 15*cl + 4*si;
+    var meas = measuredCI(S);
+    return {
+      name:c.name, color:c.color, cond:ck,
+      CIfirm:CI0, CIref:CI0*c.mult,
+      CImeas: meas==null ? null : meas*c.mult/CONDS[S.cond].mult,
+      att: attOf(S),
+      wref:6 + 0.35*cl + 0.1*si,
+      beta:0.025 + 0.0012*cl + 0.0006*si,
+      n:clamp(1.1 - 0.01*cl - 0.002*si, 0.45, 1.1),
+      kc:0.99 + 0.2*cl + 0.06*si,
+      kphi:Math.max(600, 1528 - 14*cl - 2*si),
+      nu:c.nu
+    };
+  }
+  function ciOf(soil, w){
+    if (soil.CImeas!=null) return soil.CImeas;
+    var fm = clamp(Math.exp(-soil.beta*(w - soil.wref)), 0.4, 2.0);
+    var a = soil.att, fa = 1;
+    if (!a.np){
+      var li = (w - a.PL)/a.PI;
+      if (li>0) fa = li<=1 ? 1-0.7*li : 0.3*Math.exp(-3*(li-1));
+    }
+    return Math.max(100, soil.CIref*fm*fa);
+  }
+
+  /* ---------- measured cone index profile ---------- */
+  var CI_DEPTHS = [0,5,10,15,20,30,40,50];
+  var CI_IDS = CI_DEPTHS.map(function(d,i){return "ci"+i});
+  function ciPoints(S){
+    var pts=[];
+    (S.ci||[]).forEach(function(v,i){ if (isFinite(v) && v>=0) pts.push({z:CI_DEPTHS[i], v:v}); });
+    return pts;
+  }
+  function ciAt(pts,z){
+    if (z<=pts[0].z) return pts[0].v;
+    for (var i=1;i<pts.length;i++){
+      if (z<=pts[i].z){ var t=(z-pts[i-1].z)/(pts[i].z-pts[i-1].z); return pts[i-1].v + t*(pts[i].v-pts[i-1].v); }
+    }
+    return pts[pts.length-1].v;
+  }
+  function meanTop(pts){
+    var n=60, s=0; for (var i=0;i<n;i++) s += ciAt(pts, (i+0.5)*15/n);
+    return s/n;
+  }
+  function measuredCI(S){
+    if (!S.useCI) return null;
+    var pts = ciPoints(S);
+    return pts.length>=2 ? meanTop(pts) : null;
+  }
+  var PROFILE_B = {firm:4, tilled:3, loose:3};
+  function modelProfileAt(e, cond, zcm){
+    var b = PROFILE_B[cond], a = 1 - 0.075*b;
+    return e*(a + b*zcm/100);
+  }
+
+  var DEFAULTS = {drive:"2wd", rearTyre:"14.9-28", sand:40, silt:40, clay:20, cond:"firm", moist:16, slip:10, speed:7,
+                  inflR:100, wheel:"rear", autoload:true};
+  var NUM = ["sand","silt","clay","moist","load","slip","speed","mass","fr","wb","hd","lead","inflR","inflF","dpTarget"];
+
+  function readState(){
+    var S = {cond: document.querySelector('input[name="cond"]:checked').value,
+             drive: document.querySelector('input[name="drive"]:checked').value,
+             wheel: document.querySelector('input[name="wheel"]:checked').value,
+             mode: document.querySelector('input[name="mode"]:checked').value};
+    NUM.forEach(function(k){ S[k] = +$(k).value; });
+    S.autoload = $("autoload").checked;
+    S.rearTyre = $("rearTyre").value; S.rear = tyreByKey(S.rearTyre);
+    S.frontTyre = $("frontTyre").value;
+    S.front = S.frontTyre==="same" ? S.rear : tyreByKey(S.frontTyre);
+    if (S.drive==="4wd" && S.frontTyre==="same") S.inflF = S.inflR;
+    CAL.kCI = clamp(+$("kCI").value||1, 0.1, 3); CAL.kRho = clamp(+$("kRho").value||1, 0.1, 3);
+    CAL.kp = clamp(+$("kp").value||1.3, 0.8, 2.2); CAL.lug = clamp(+$("lug").value||0.6, 0.3, 1);
+    S.useCI = $("useci").checked;
+    S.ci = CI_IDS.map(function(id){ return parseFloat($(id).value); });
+    return S;
+  }
+  function applyDrive(d){
+    var D = DRIVES[d], fs = $("frontTyre");
+    if (d==="4wd"){ fs.innerHTML = '<option value="same">Same as rear tyre</option>' + FRONT_4WD.map(optHtml).join(""); fs.disabled = false; fs.value = "same"; }
+    else {
+      fs.innerHTML = (d==="2wd"?FRONT_2WD:FRONT_MFWD).map(optHtml).join("");
+      fs.disabled = false; fs.value = D.frontTyre;
+    }
+    $("mass").value = D.mass; $("fr").value = D.fr; $("wb").value = D.wb; $("lead").value = D.lead; $("inflF").value = D.inflF;
+    $("inflF").disabled = false;
+    $("leadwrap").hidden = d!=="mfwd";
+    $("wheel-front").disabled = d==="2wd";
+    if (d==="2wd") $("wheel-rear").checked = true;
+    $("drive-note").textContent = D.note;
+    $("front-label").textContent = d==="2wd" ? "Front tyre (free-rolling)" : (d==="mfwd" ? "Front tyre (driven)" : "Front tyre");
+  }
+  function writeState(s){
+    if (s.drive){ $("drive-"+s.drive).checked = true; applyDrive(s.drive); }
+    if (s.rearTyre) $("rearTyre").value = s.rearTyre;
+    if (s.cond) document.getElementById("cond-"+s.cond).checked = true;
+    if (s.wheel) document.getElementById("wheel-"+s.wheel).checked = true;
+    if (s.autoload!=null) $("autoload").checked = s.autoload;
+    NUM.forEach(function(k){ if (s[k]!=null) $(k).value = s[k]; });
+    $("useci").checked = false; $("ci-inputs").hidden = true;
+    update();
+  }
+  // Scenarios keep the chosen tractor and texture. Moisture is set relative to the soil's field capacity and Atterberg limits.
+  var SCEN = {
+    dry:  {cond:"firm",  slip:8,  speed:7, inflR:100, moist:function(w,a){return 0.75*w}},
+    wet:  {cond:"firm",  slip:15, speed:5, inflR:120, moist:function(w,a){return a.np ? 1.8*w : a.PL+0.3*a.PI}},
+    seed: {cond:"tilled",slip:12, speed:7, inflR:80,  moist:function(w,a){return 0.9*w}},
+    soft: {cond:"loose", slip:18, speed:6, inflR:60,  moist:function(w,a){return 0.8*w}}
+  };
+  function scenarioState(key){
+    var S = readState(), sc = SCEN[key];
+    var wfc = 6 + 0.35*S.clay + 0.1*S.silt;
+    var m = clamp(Math.round(sc.moist(wfc, attOf(S))*2)/2, 3, 50);
+    return {cond:sc.cond, moist:m, slip:sc.slip, speed:sc.speed, inflR:sc.inflR};
+  }
+
+  /* ---------- tractor / soil model ---------- */
+  function tyreGeom(S){
+    var t = S.tyreObj, h = t.ar*t.b;
+    var c = TSM.contact({b:t.b, d:t.d, h:h}, S.load, S.infl, {kp:CAL.kp, lug:CAL.lug});
+    return {b:t.b, d:t.d, h:h, dh:c.dh, delta:c.delta, L:c.L, A:c.A, Ag:c.Ag, pc:c.pc};
+  }
+  /* Brixius (1987) / ASABE D497.7 wheel-numeric traction, with field-calibration multipliers (CAL) */
+  function traction(soil, S, G, sPct){
+    var s = sPct/100;
+    var CI = ciOf(soil, S.moist);
+    var r = TSM.brixius({CI:CI, kCI:CAL.kCI, kRho:CAL.kRho, b:G.b, d:G.d, W:S.load, s:s, dh:G.dh,
+                         radial:!!(S.tyreObj && S.tyreObj.radial)});
+    var GTR = r.mu, MRR = r.rho, NTR = GTR - MRR;
+    return {CI:CI, Bn:r.Bn, GTR:GTR, MRR:MRR, NTR:NTR, TE:clamp(NTR*(1-s)/GTR, 0, 1)};
+  }
+  function optimum(soil, S, G){
+    var best = {s:0, te:-1};
+    for (var s=0.5; s<=30; s+=0.25){
+      var r = traction(soil,S,G,s);
+      if (r.TE>best.te) best = {s:s, te:r.TE};
+    }
+    return best;
+  }
+  function sinkage(soil, S, G, sPct){
+    var kscale = clamp(ciOf(soil,S.moist)/soil.CIfirm, 0.1, 3);
+    var k = (soil.kc/G.b + soil.kphi)*kscale;
+    var z0 = Math.pow(G.pc/k, 1/soil.n);
+    return z0*(1+4*sPct/100);
+  }
+  function nuOf(soil, S){ return clamp(soil.nu - 0.08*(S.moist-soil.wref), 2.5, 6); }
+  function stressAt(soil, S, G, z){
+    return TSM.stressAt(G.pc, G.A, z, nuOf(soil,S));
+  }
+
+  /* ---------- whole tractor ---------- */
+  function axle(soil,S,tyre,infl,Wwheel,sPct){
+    var s2 = {load:Math.max(0.05,Wwheel), infl:infl, tyreObj:tyre, moist:S.moist};
+    var G = tyreGeom(s2);
+    return {r:traction(soil,s2,G,sPct), G:G, load:s2.load};
+  }
+  function tractorSolve(S, soil, sPct){
+    var Wt = S.mass*9.81/1000, Wr0 = S.fr/100*Wt, Wf0 = Wt - Wr0;
+    var sR = sPct/100, lead = S.drive==="mfwd" ? S.lead/100 : 0;
+    var sFpct = (1 - (1-sR)/(1+lead))*100;
+    var frontDriven = S.drive!=="2wd";
+    var DP = 0, o = null;
+    for (var it=0; it<40; it++){
+      var dW = DP*S.hd/S.wb;
+      var Wr = Math.max(0.1, Wr0+dW), Wf = Math.max(0, Wf0-dW);
+      var rr = axle(soil,S,S.rear,S.inflR,Wr/2,sPct), ff, dpNew;
+      if (frontDriven){ ff = axle(soil,S,S.front,S.inflF,Wf/2,sFpct); dpNew = Wr*rr.r.NTR + Wf*ff.r.NTR; }
+      else { ff = axle(soil,S,S.front,S.inflF,Wf/2,0); dpNew = Wr*rr.r.NTR - Wf*ff.r.MRR; }
+      o = {Wt:Wt, Wr0:Wr0, Wf0:Wf0, Wr:Wr, Wf:Wf, dW:dW, rr:rr, ff:ff, sFpct:sFpct, frontDriven:frontDriven, lead:lead, DP:dpNew};
+      DP = 0.5*DP + 0.5*dpNew;
+    }
+    var vt = S.speed/3.6, va = vt*(1-sR);
+    var Pin = Wr*rr.r.GTR*vt + (frontDriven ? Wf*ff.r.GTR*vt*(1+lead) : 0);
+    o.va = va; o.Pin = Math.max(0,Pin); o.Pdb = Math.max(0,o.DP)*va;
+    o.eff = o.Pin>0 ? clamp(o.Pdb/o.Pin, 0, 1) : 0;
+    o.ratio = o.DP/Wt;
+    o.frontMR = frontDriven ? 0 : Wf*ff.r.MRR;
+    o.frontPull = frontDriven ? Wf*ff.r.NTR : 0;
+    return o;
+  }
+  function wtCurve(S, soil){
+    var pts = [], best = {s:0, e:-1};
+    SL.forEach(function(s){
+      var t = tractorSolve(S,soil,s);
+      pts.push({s:s, ratio:t.ratio, eff:t.eff});
+      if (t.eff>best.e) best = {s:s, e:t.eff};
+    });
+    return {pts:pts, best:best};
+  }
+
+  /* ---------- chart helpers ---------- */
+  function frame(o){
+    var xs=function(v){return o.ml+(v-o.x0)/(o.x1-o.x0)*(o.W-o.ml-o.mr)};
+    var ys=function(v){return o.mt+(1-(v-o.y0)/(o.y1-o.y0))*(o.H-o.mt-o.mb)};
+    return {xs:xs, ys:ys};
+  }
+  function axes(o, f){
+    var g="";
+    o.yt.forEach(function(t){
+      g += '<line x1="'+o.ml+'" x2="'+(o.W-o.mr)+'" y1="'+f.ys(t)+'" y2="'+f.ys(t)+'" stroke="var(--grid)"/>';
+      g += '<text x="'+(o.ml-8)+'" y="'+(f.ys(t)+4)+'" text-anchor="end">'+(o.fy?o.fy(t):t)+'</text>';
+    });
+    o.xt.forEach(function(t){
+      g += '<line x1="'+f.xs(t)+'" x2="'+f.xs(t)+'" y1="'+o.mt+'" y2="'+(o.H-o.mb)+'" stroke="var(--grid)"/>';
+      g += '<text x="'+f.xs(t)+'" y="'+(o.H-o.mb+16)+'" text-anchor="middle">'+(o.fx?o.fx(t):t)+'</text>';
+    });
+    g += '<line x1="'+o.ml+'" x2="'+(o.W-o.mr)+'" y1="'+(o.H-o.mb)+'" y2="'+(o.H-o.mb)+'" stroke="var(--muted)"/>';
+    g += '<line x1="'+o.ml+'" x2="'+o.ml+'" y1="'+o.mt+'" y2="'+(o.H-o.mb)+'" stroke="var(--muted)"/>';
+    g += '<text x="'+((o.ml+o.W-o.mr)/2)+'" y="'+(o.H-6)+'" text-anchor="middle">'+o.xl+'</text>';
+    g += '<text transform="translate(12,'+((o.mt+o.H-o.mb)/2)+') rotate(-90)" text-anchor="middle">'+o.yl+'</text>';
+    return g;
+  }
+  function path(pts){
+    return pts.map(function(p,i){return (i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)}).join(' ');
+  }
+  var SL = []; for (var q=0;q<=30;q+=0.5) SL.push(q);
+
+  /* ---------- USDA triangle ---------- */
+  var TRI = {W:440,H:372,BL:[64,310],BR:[364,310],TOP:[214,310-300*Math.sqrt(3)/2]};
+  function triPt(sa,cl){
+    var si = 100-sa-cl;
+    return [(TRI.BL[0]*sa + TRI.BR[0]*si + TRI.TOP[0]*cl)/100,
+            (TRI.BL[1]*sa + TRI.BR[1]*si + TRI.TOP[1]*cl)/100];
+  }
+  function drawTri(S, ci){
+    var g = "";
+    CLASSES.forEach(function(c,i){
+      var pts = c.p.map(function(v){return triPt(v[0],v[1])});
+      var sel = i===ci;
+      g += '<path d="'+path(pts)+' Z" fill="var(--accent)" fill-opacity="'+(sel?0.3:0.05)+'" stroke="var(--muted)" stroke-width="1" stroke-linejoin="round"/>';
+    });
+    CLASSES.forEach(function(c,i){
+      var sx=0, sy=0; c.p.forEach(function(v){var p=triPt(v[0],v[1]); sx+=p[0]; sy+=p[1];});
+      sx/=c.p.length; sy/=c.p.length;
+      if (c.a==="Si"){ sx += 2; sy -= 8; }
+      if (c.a==="S"){ sx += 2; sy += 2; }
+      if (c.a==="LS"){ sy += 1; }
+      g += '<text x="'+sx.toFixed(1)+'" y="'+(sy+3.5).toFixed(1)+'" text-anchor="middle" style="fill:var(--fg);font-size:10.5px;'+(i===ci?'font-weight:600;':'opacity:.75;')+'">'+c.a+'</text>';
+    });
+    for (var t=10;t<=90;t+=10){
+      var L = [TRI.BL[0]+(TRI.TOP[0]-TRI.BL[0])*t/100, TRI.BL[1]+(TRI.TOP[1]-TRI.BL[1])*t/100];
+      g += '<text x="'+(L[0]-8)+'" y="'+(L[1]+4)+'" text-anchor="end">'+t+'</text>';
+      var R = [TRI.TOP[0]+(TRI.BR[0]-TRI.TOP[0])*t/100, TRI.TOP[1]+(TRI.BR[1]-TRI.TOP[1])*t/100];
+      g += '<text x="'+(R[0]+8)+'" y="'+(R[1]+4)+'" text-anchor="start">'+t+'</text>';
+      var B = [TRI.BR[0]+(TRI.BL[0]-TRI.BR[0])*t/100, TRI.BR[1]];
+      g += '<text x="'+B[0]+'" y="'+(B[1]+16)+'" text-anchor="middle">'+t+'</text>';
+    }
+    g += '<text transform="translate(78,160) rotate(-60)" text-anchor="middle" style="font-size:12px;fill:var(--fg)">Clay (%) →</text>';
+    g += '<text transform="translate(350,160) rotate(60)" text-anchor="middle" style="font-size:12px;fill:var(--fg)">Silt (%) →</text>';
+    g += '<text x="'+((TRI.BL[0]+TRI.BR[0])/2)+'" y="354" text-anchor="middle" style="font-size:12px;fill:var(--fg)">← Sand (%)</text>';
+    var p = triPt(S.sand, S.clay);
+    g += '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="8" fill="var(--red)" stroke="var(--surface)" stroke-width="2.5"/>';
+    g += '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="2.5" fill="var(--surface)"/>';
+    $("tri").innerHTML = g;
+  }
+
+  /* ---------- Atterberg limits ---------- */
+  function attOf(S){
+    var cl=S.clay, si=S.silt;
+    var PI = Math.max(0, 0.65*cl + 0.06*si - 2);
+    var PL = 12 + 0.22*cl + 0.10*si;
+    return {np: PI<4, PI:PI, PL:PL, LL:PL+PI, SL:0.55*PL};
+  }
+  function attInfo(a,w){
+    if (a.np) return {key:"np", label:"Non-plastic", tone:"good", li:null,
+      text:"This texture has no plastic range. Strength depends on density, confinement and moisture suction rather than cohesion."};
+    var li = (w-a.PL)/a.PI;
+    if (w<a.SL) return {key:"solid", label:"Solid", tone:"warn", li:li,
+      text:"Below the shrinkage limit the soil is hard and brittle. Expect high draft, clods and a high cone index."};
+    if (w<a.PL) return {key:"semi", label:"Semi-solid (friable)", tone:"good", li:li,
+      text:"Between the shrinkage and plastic limits the soil is friable. This is the best window for tillage and traction."};
+    if (w<a.LL) return {key:"plastic", label:"Plastic", tone:"warn", li:li,
+      text:"Above the plastic limit the soil smears and sticks, loses strength and compacts under wheel passes. Delay field work if possible."};
+    return {key:"liquid", label:"Liquid", tone:"crit", li:li,
+      text:"Above the liquid limit the soil flows and has almost no bearing capacity. Wheels sink and traction collapses."};
+  }
+  function drawAtt(S,a,ai,soil){
+    var W=440, ml=10, mr=10, barY=36, barH=24;
+    var max = Math.max(45, a.np?0:a.LL*1.12, S.moist*1.05);
+    var xs = function(w){return ml + w/max*(W-ml-mr)};
+    var g = '';
+    var segs = a.np ? [[0,max,"Non-plastic (cohesionless)","var(--muted)",0.2]] : [
+      [0,a.SL,"Solid","var(--muted)",0.28],
+      [a.SL,a.PL,"Semi-solid","var(--sandy)",0.38],
+      [a.PL,a.LL,"Plastic","var(--tilled)",0.38],
+      [a.LL,max,"Liquid","var(--accent)",0.38]];
+    segs.forEach(function(s){
+      var x0=xs(s[0]), x1=xs(s[1]);
+      g += '<rect x="'+x0.toFixed(1)+'" y="'+barY+'" width="'+Math.max(0,x1-x0).toFixed(1)+'" height="'+barH+'" fill="'+s[3]+'" fill-opacity="'+s[4]+'"/>';
+      if (x1-x0 > 52) g += '<text x="'+((x0+x1)/2).toFixed(1)+'" y="'+(barY+barH/2+4)+'" text-anchor="middle" style="fill:var(--fg);font-size:10.5px">'+s[2]+'</text>';
+    });
+    g += '<rect x="'+ml+'" y="'+barY+'" width="'+(W-ml-mr)+'" height="'+barH+'" fill="none" stroke="var(--muted)"/>';
+    if (!a.np){
+      [["SL",a.SL,"middle",0],["PL",a.PL,"end",-3],["LL",a.LL,"start",3]].forEach(function(t){
+        var x = xs(t[1]);
+        g += '<line x1="'+x.toFixed(1)+'" x2="'+x.toFixed(1)+'" y1="'+barY+'" y2="'+(barY+barH+5)+'" stroke="var(--fg)" stroke-opacity="0.7"/>';
+        g += '<text x="'+(x+t[3]).toFixed(1)+'" y="'+(barY+barH+17)+'" text-anchor="'+t[2]+'" style="fill:var(--fg)">'+t[0]+' '+fmt(t[1],0)+'</text>';
+      });
+    }
+    var fx = xs(soil.wref);
+    g += '<line x1="'+fx.toFixed(1)+'" x2="'+fx.toFixed(1)+'" y1="'+(barY+barH-6)+'" y2="'+(barY+barH+30)+'" stroke="var(--muted)" stroke-dasharray="3 3"/>';
+    g += '<text x="'+fx.toFixed(1)+'" y="'+(barY+barH+42)+'" text-anchor="middle">field capacity '+fmt(soil.wref,0)+'</text>';
+    var mx = xs(S.moist);
+    g += '<path d="M'+(mx-6).toFixed(1)+' 17 L'+(mx+6).toFixed(1)+' 17 L'+mx.toFixed(1)+' '+(barY-1)+' Z" fill="var(--red)"/>';
+    var tx = clamp(mx, 40, W-40);
+    g += '<text x="'+tx.toFixed(1)+'" y="11" text-anchor="middle" style="fill:var(--fg);font-size:11.5px">w = '+fmt(S.moist,1)+' %</text>';
+    $("att-svg").innerHTML = g;
+    var cell = function(l,v){return '<div><span class="l">'+l+'</span><b>'+v+'</b></div>'};
+    $("att-row").innerHTML = a.np
+      ? cell("SL","—")+cell("PL","—")+cell("LL","—")+cell("PI","NP")+cell("LI","—")
+      : cell("SL",fmt(a.SL,1))+cell("PL",fmt(a.PL,1))+cell("LL",fmt(a.LL,1))+cell("PI",fmt(a.PI,1))+cell("LI",fmt(ai.li,2));
+    $("att-note").innerHTML = '<span class="pill '+ai.tone+'" style="margin:0 6px 0 0">'+ai.label+'</span>'+ai.text;
+  }
+
+  /* ---------- cone index chart ---------- */
+  function drawCI(S){
+    var sm = soilFor(Object.assign({}, S, {useCI:false}), S.cond);
+    var CImod = ciOf(sm, S.moist);
+    var pts = ciPoints(S), measured = S.useCI && pts.length>=2;
+    var f = measured ? function(z){return ciAt(pts,z)} : function(z){return modelProfileAt(CImod,S.cond,z)};
+    var mean = measured ? meanTop(pts) : CImod;
+    var maxv = 0, rootZ = null;
+    for (var z=0; z<=50; z+=0.5){ var v=f(z); maxv=Math.max(maxv,v); if (rootZ===null && v>=2000) rootZ=z; }
+    var x1 = Math.max(2500, Math.ceil(maxv*1.1/500)*500), step = x1>5000?1000:500, xt=[];
+    for (var t=0;t<=x1;t+=step) xt.push(t);
+    var o = {W:440,H:236,ml:44,mr:14,mt:14,mb:44,x0:0,x1:x1,y0:0,y1:50,xt:xt,yt:[0,10,20,30,40,50],
+      xl:"Cone index (kPa)",yl:"Depth (cm)"};
+    var fr = frame(o);
+    var ys = function(zz){return o.mt + (zz/50)*(o.H-o.mt-o.mb)};
+    fr.ys = ys;
+    var g = axes(o,fr);
+    g += '<rect x="'+o.ml+'" y="'+ys(0)+'" width="'+(o.W-o.ml-o.mr)+'" height="'+(ys(15)-ys(0))+'" fill="var(--accent)" fill-opacity="0.09"/>';
+    g += '<text x="'+(o.W-o.mr-4)+'" y="'+(ys(15)-4)+'" text-anchor="end">0–15 cm traction layer</text>';
+    if (2000<=x1){
+      g += '<line x1="'+fr.xs(2000)+'" x2="'+fr.xs(2000)+'" y1="'+o.mt+'" y2="'+(o.H-o.mb)+'" stroke="var(--warn)" stroke-dasharray="4 3"/>';
+      g += '<text x="'+(fr.xs(2000)+4)+'" y="'+(o.H-o.mb-6)+'" style="fill:var(--warn)">2000 kPa</text>';
+    }
+    var line=[]; for (var zz=0; zz<=50; zz+=1) line.push([fr.xs(f(zz)), ys(zz)]);
+    g += '<path d="'+path(line)+'" fill="none" stroke="var(--accent)" stroke-width="2.8" stroke-linejoin="round"'+(measured?'':' stroke-dasharray="6 4"')+'/>';
+    if (measured) pts.forEach(function(p){ g += '<circle cx="'+fr.xs(p.v)+'" cy="'+ys(p.z)+'" r="4.5" fill="var(--surface)" stroke="var(--accent)" stroke-width="2.2"/>'; });
+    var mx = fr.xs(mean);
+    g += '<line x1="'+mx+'" x2="'+mx+'" y1="'+ys(0)+'" y2="'+ys(15)+'" stroke="var(--red)" stroke-width="3"/>';
+    var left = mx > o.W*0.6;
+    g += '<text x="'+(left?mx-8:mx+8)+'" y="'+(ys(7.5)+4)+'" text-anchor="'+(left?'end':'start')+'" style="fill:var(--fg);font-size:11.5px">mean '+fmt(mean,0)+' kPa</text>';
+    $("ci-svg").innerHTML = g;
+    var note = '<b>Mean CI, 0–150 mm: '+fmt(mean,0)+' kPa</b> ('+(measured?'measured; model estimate '+fmt(CImod,0)+' kPa':'modelled from texture, moisture and consistency; dashed')+'). ';
+    if (S.useCI && !measured) note += 'Enter at least two depths to use a measured profile. ';
+    note += rootZ===null ? 'CI stays below 2000 kPa to 50 cm.' : (rootZ<=0.5 ? 'CI is already above 2000 kPa at the surface.' : 'CI reaches 2000 kPa at about '+fmt(rootZ,0)+' cm, a common root-restricting level.');
+    $("ci-note").innerHTML = note;
+  }
+
+  /* ---------- field view: soil cross-section with tractor, tyres and axle loads ---------- */
+  function mulberry(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; var t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  var SC = (function(){
+    var r = mulberry(11), o = {grains:[], clods:[], cracks:[]};
+    for (var i=0;i<380;i++) o.grains.push({x:r()*640, y:r(), u:r(), s:r()});
+    for (var j=0;j<40;j++) o.clods.push({x:12+r()*616, r:r(), t:r()});
+    for (var c=0;c<16;c++) o.cracks.push({x:(c+0.5)/16*640 + (r()-0.5)*26, d:r(), j:r()});
+    var perm = o.cracks.map(function(v,i){return i}).sort(function(a,b){return o.cracks[a].j-o.cracks[b].j});
+    o.order = perm;
+    return o;
+  })();
+  var SOILRGB = {sand:[224,198,142], silt:[190,172,146], clay:[148,98,68]};
+  function rgbStr(c,k){ k = k==null?1:k; return "rgb("+Math.round(clamp(c[0]*k,0,255))+","+Math.round(clamp(c[1]*k,0,255))+","+Math.round(clamp(c[2]*k,0,255))+")"; }
+  function mixC(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+
+  function drawScene(S, soil, att, ai, T){
+    var W=640, H=460, G=330, DEPTH=112;
+    var tr=S.rear, tf=S.front, wb=S.wb;
+    var k = Math.min(88, 540/(wb+(tr.d+tf.d)/2+1.5));
+    var Rr=tr.d/2*k, Rf=tf.d/2*k;
+    var rearDrv = true, frontDrv = S.drive!=="2wd";
+    // weight arrows scale (px per kN)
+    var roofTipR = G-2*Rr/2 - 1.55*k - 6;                 // y of rear arrow tip
+    var maxLen = Math.min(82, roofTipR-62);
+    var maxLoad = Math.max(T.Wr,T.Wf,T.Wr0,T.Wf0,0.1);
+    var ppk = Math.max(maxLen,20)/maxLoad;
+    var pull = Math.max(0,T.DP)*ppk;
+    var leftExt = Math.max(Rr,0.95*k) + pull + 6;
+    var rightExt = Math.max(Rf,0.45*k) + 4;
+    var total = leftExt + wb*k + rightExt;
+    var xr = (W-total)/2 + leftExt, xf = xr + wb*k;
+    var yR = G-Rr, yF = G-Rf;
+    // rut depths (true scale)
+    var zrT = sinkage(soil,{moist:S.moist},T.rr.G,S.slipR), zfT = sinkage(soil,{moist:S.moist},T.ff.G,T.frontDriven?T.sFpct:0);
+    var zr = clamp(zrT*k, 0, 34), zf = clamp(zfT*k, 0, 34);
+    var hwr = T.rr.G.L*k/2+8, hwf = T.ff.G.L*k/2+8;
+    // soil colour from texture, moisture, dryness
+    var base = mixC(mixC([0,0,0],SOILRGB.sand,1),[0,0,0],0);
+    var f = [S.sand/100, S.silt/100, S.clay/100];
+    base = [0,1,2].map(function(i){ return SOILRGB.sand[i]*f[0]+SOILRGB.silt[i]*f[1]+SOILRGB.clay[i]*f[2]; });
+    var m = clamp(S.moist/(2*soil.wref),0,1);
+    var dry = clamp((soil.wref - S.moist)/(soil.wref-3),0,1);
+    var col = mixC(base,[255,250,240],0.16*dry);
+    var cWet = [0,1,2].map(function(i){return col[i]*(1-0.42*m)});
+    var wet = ai.li!=null ? clamp(ai.li,0,1.3) : clamp((S.moist-1.3*soil.wref)/(0.8*soil.wref),0,1)*0.6;
+    var ciNow = ciOf(soil,S.moist);
+    var amp = S.cond==="firm"?0.9:(S.cond==="tilled"?3.2:5.5);
+    function surf(x){
+      var y = G + amp*(0.6*Math.sin(x*0.09+1.3)+0.4*Math.sin(x*0.23+0.4));
+      var d = Math.abs(x-xr); if (d<hwr) y += zr*0.5*(1+Math.cos(Math.PI*d/hwr));
+      d = Math.abs(x-xf); if (d<hwf) y += zf*0.5*(1+Math.cos(Math.PI*d/hwf));
+      return y;
+    }
+    var pts = []; for (var x=0;x<=W;x+=4) pts.push([x,surf(x)]);
+    var line = pts.map(function(p,i){return (i?'L':'M')+p[0]+' '+p[1].toFixed(1)}).join(' ');
+    var poly = line+' L'+W+' '+(G+DEPTH)+' L0 '+(G+DEPTH)+' Z';
+    var g = '<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+rgbStr(cWet,1)+'"/><stop offset="1" stop-color="'+rgbStr(cWet,0.72)+'"/></linearGradient><clipPath id="sclip"><path d="'+poly+'"/></clipPath></defs>';
+    g += '<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="var(--bg)"/>';
+    g += '<g transform="translate(640,0) scale(-1,1)">';
+    g += '<path d="'+poly+'" fill="url(#sg)"/>';
+    g += '<g clip-path="url(#sclip)">';
+    // compaction strata: darker, denser lines where the cone index is high
+    var sCI = clamp(ciNow/2200,0.06,1);
+    for (var j=1;j<=7;j++){
+      var yy = G + j*DEPTH/8, zc = j/8*50, ratio = clamp(modelProfileAt(1,S.cond,zc)/1.3,0.3,1.6);
+      g += '<line x1="0" x2="'+W+'" y1="'+yy+'" y2="'+yy+'" stroke="rgb(40,25,15)" stroke-opacity="'+(0.07+0.3*sCI*ratio/1.6).toFixed(3)+'" stroke-width="'+(0.5+1.8*sCI*ratio/1.6).toFixed(2)+'"/>';
+    }
+    // grains: sand (coarse light), silt (fine neutral), clay (fine dark dashes)
+    SC.grains.forEach(function(p){
+      var gx=p.x, gy=G+4+p.y*(DEPTH-6);
+      if (p.u*100 < S.sand) g += '<circle cx="'+gx.toFixed(1)+'" cy="'+gy.toFixed(1)+'" r="'+(1.4+1.3*p.s).toFixed(1)+'" fill="'+rgbStr(mixC(cWet,[255,245,220],0.5))+'" fill-opacity=".85"/>';
+      else if (p.u*100 < S.sand+S.silt) g += '<circle cx="'+gx.toFixed(1)+'" cy="'+gy.toFixed(1)+'" r="'+(0.7+0.5*p.s).toFixed(1)+'" fill="'+rgbStr(cWet,0.8)+'" fill-opacity=".8"/>';
+      else g += '<line x1="'+gx.toFixed(1)+'" y1="'+gy.toFixed(1)+'" x2="'+(gx+3+3*p.s).toFixed(1)+'" y2="'+(gy+0.6).toFixed(1)+'" stroke="'+rgbStr(cWet,0.6)+'" stroke-width="1.1" stroke-opacity=".7"/>';
+    });
+    // desiccation cracks: more and wider in dry clay
+    var inten = dry*clamp((S.clay-8)/30,0,1);
+    var nC = Math.round(inten*SC.cracks.length), dark = rgbStr(cWet,0.28);
+    for (var q=0;q<nC;q++){
+      var c = SC.cracks[SC.order[q]];
+      var x0 = c.x, depth = 22 + (DEPTH-30)*inten*(0.35+0.65*c.d), w0 = 0.9+2.6*inten*(0.5+0.5*c.d), seg = 8;
+      var L=[], R=[], cx=x0, cy=surf(x0), n=Math.max(3,Math.round(depth/seg));
+      for (var s=0;s<=n;s++){
+        var tt=s/n, w=w0*(1-tt);
+        L.push((cx-w).toFixed(1)+' '+cy.toFixed(1)); R.push((cx+w).toFixed(1)+' '+cy.toFixed(1));
+        cy += seg; cx += (Math.sin(s*2.7+c.j*9)*2.2);
+      }
+      g += '<path d="M'+L.join('L')+'L'+R.reverse().join('L')+'Z" fill="'+dark+'" fill-opacity=".9"/>';
+    }
+    g += '</g>';
+    // surface condition: clods on tilled and loose seedbeds
+    if (S.cond!=="firm"){
+      var nCl = S.cond==="tilled" ? 26 : 38, rMax = S.cond==="tilled" ? 8 : 12;
+      for (var i=0;i<nCl;i++){
+        var cl = SC.clods[i], cxp = cl.x;
+        if (Math.abs(cxp-xr)<hwr || Math.abs(cxp-xf)<hwf) continue;
+        var rr = 3+cl.r*rMax;
+        g += '<ellipse cx="'+cxp.toFixed(1)+'" cy="'+(surf(cxp)-rr*0.35).toFixed(1)+'" rx="'+rr.toFixed(1)+'" ry="'+(rr*0.72).toFixed(1)+'" fill="'+rgbStr(mixC(cWet,[255,245,225],0.12+0.1*cl.t))+'" stroke="'+rgbStr(cWet,0.6)+'" stroke-width=".8"/>';
+      }
+    }
+    // free water above the plastic limit
+    if (wet>0){
+      var tw = 3.5+9*Math.min(wet,1.3);
+      g += '<path d="'+line+'" fill="none" stroke="#4f9fe0" stroke-opacity="'+(0.4+0.4*Math.min(wet,1)).toFixed(2)+'" stroke-width="'+tw.toFixed(1)+'" stroke-linejoin="round"/>';
+      g += '<path d="'+line+'" fill="none" stroke="#ffffff" stroke-opacity="'+(0.15+0.3*Math.min(wet,1)).toFixed(2)+'" stroke-width="1" stroke-dasharray="14 22" transform="translate(0,-'+(tw/2).toFixed(1)+')"/>';
+    }
+    g += '<path d="'+line+'" fill="none" stroke="'+rgbStr(cWet,0.55)+'" stroke-width="1.4"/>';
+
+    // tractor body (dim)
+    var bf = 'fill="var(--muted)" fill-opacity=".16" stroke="var(--muted)" stroke-opacity=".5" stroke-width="1.2" stroke-linejoin="round"';
+    var cabL=xr-0.62*k, cabW=0.98*k, cabT=yR-1.55*k;
+    g += '<g>';
+    g += '<rect x="'+(xr+0.3*k).toFixed(1)+'" y="'+(yR-0.62*k).toFixed(1)+'" width="'+((xf+0.42*k)-(xr+0.3*k)).toFixed(1)+'" height="'+(0.8*k).toFixed(1)+'" rx="'+(0.1*k).toFixed(1)+'" '+bf+'/>';
+    g += '<path d="M'+cabL.toFixed(1)+' '+(yR+0.2*k).toFixed(1)+' L'+cabL.toFixed(1)+' '+(cabT+0.2*k).toFixed(1)+' Q'+cabL.toFixed(1)+' '+cabT.toFixed(1)+' '+(cabL+0.2*k).toFixed(1)+' '+cabT.toFixed(1)+' L'+(cabL+cabW-0.1*k).toFixed(1)+' '+cabT.toFixed(1)+' L'+(cabL+cabW+0.1*k).toFixed(1)+' '+(yR-0.62*k).toFixed(1)+' L'+(cabL+cabW+0.1*k).toFixed(1)+' '+(yR+0.2*k).toFixed(1)+' Z" '+bf+'/>';
+    g += '<rect x="'+(cabL+0.14*k).toFixed(1)+'" y="'+(cabT+0.14*k).toFixed(1)+'" width="'+(0.5*k).toFixed(1)+'" height="'+(0.5*k).toFixed(1)+'" rx="3" fill="var(--surface)" fill-opacity=".7" stroke="var(--muted)" stroke-opacity=".35"/>';
+    g += '<rect x="'+(xf+0.12*k).toFixed(1)+'" y="'+(yR-1.14*k).toFixed(1)+'" width="'+(0.07*k).toFixed(1)+'" height="'+(0.52*k).toFixed(1)+'" '+bf+'/>';
+    g += '<line x1="'+xf.toFixed(1)+'" y1="'+(yR+0.18*k).toFixed(1)+'" x2="'+xf.toFixed(1)+'" y2="'+yF.toFixed(1)+'" stroke="var(--muted)" stroke-opacity=".5" stroke-width="'+(0.09*k).toFixed(1)+'"/>';
+    var hy = G - S.hd*k, hx = xr-0.9*k;
+    g += '<path d="M'+xr.toFixed(1)+' '+yR.toFixed(1)+' L'+(xr-0.15*k).toFixed(1)+' '+hy.toFixed(1)+' L'+hx.toFixed(1)+' '+hy.toFixed(1)+'" fill="none" stroke="var(--muted)" stroke-opacity=".55" stroke-width="3"/>';
+    g += '</g>';
+
+    // wheels: highlighted, drawn to scale from the selected tyre sizes
+    function wheel(cx, cy, tyre, drv, selected){
+      var R = tyre.d/2*k, hh = tyre.ar*tyre.b*k, col = drv ? "#d9822b" : "#2f7fd0", s = '';
+      s += '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+R.toFixed(1)+'" fill="'+col+'" fill-opacity=".92" stroke="rgba(0,0,0,.55)" stroke-width="1.4"/>';
+      if (drv){
+        for (var a=0;a<28;a++){
+          var th = a/28*2*Math.PI, r0 = R-hh*0.55, c=Math.cos(th), sn=Math.sin(th);
+          s += '<line x1="'+(cx+c*r0).toFixed(1)+'" y1="'+(cy+sn*r0).toFixed(1)+'" x2="'+(cx+c*(R-0.5)).toFixed(1)+'" y2="'+(cy+sn*(R-0.5)).toFixed(1)+'" stroke="rgba(0,0,0,.5)" stroke-width="'+Math.max(2,hh*0.1).toFixed(1)+'" stroke-linecap="round"/>';
+        }
+      } else {
+        s += '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+(R-hh*0.25).toFixed(1)+'" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="1.2"/>';
+        s += '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+(R-hh*0.55).toFixed(1)+'" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="1.2"/>';
+      }
+      s += '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+Math.max(4,R-hh).toFixed(1)+'" fill="var(--surface)" stroke="rgba(0,0,0,.55)" stroke-width="1.2"/>';
+      s += '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+Math.max(3,(R-hh)*0.22).toFixed(1)+'" fill="var(--muted)"/>';
+      if (selected) s += '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+(R+5).toFixed(1)+'" fill="none" stroke="var(--fg)" stroke-width="1.6" stroke-dasharray="5 4"/>';
+      return s;
+    }
+    var rearSel = (S.wheel==="rear") || S.drive==="2wd";
+    g += wheel(xr, yR+zr, tr, rearDrv, rearSel);
+    g += wheel(xf, yF+zf, tf, frontDrv, !rearSel);
+
+    // axle loads: solid arrow = current dynamic load, dashed outline = static load
+    function arrow(x, tipY, kN, dashed){
+      var len = Math.max(14, kN*ppk), sw = 7, hw = 15, hl = Math.min(18, len*0.5), top = tipY-len;
+      var d = 'M'+(x-sw)+' '+top.toFixed(1)+' L'+(x+sw)+' '+top.toFixed(1)+' L'+(x+sw)+' '+(tipY-hl).toFixed(1)+' L'+(x+hw)+' '+(tipY-hl).toFixed(1)+' L'+x.toFixed(1)+' '+tipY.toFixed(1)+' L'+(x-hw)+' '+(tipY-hl).toFixed(1)+' L'+(x-sw)+' '+(tipY-hl).toFixed(1)+' Z';
+      return dashed ? '<path d="'+d+'" fill="none" stroke="var(--fg)" stroke-opacity=".55" stroke-width="1.2" stroke-dasharray="4 3"/>'
+                    : '<path d="'+d+'" fill="#c42b3b" fill-opacity=".85" stroke="#8d1d29" stroke-width="1"/>';
+    }
+    var tipR = yR-1.55*k-6, tipF = yR-0.62*k-6;
+    g += arrow(xr,tipR,T.Wr0,true) + arrow(xr,tipR,T.Wr,false);
+    g += arrow(xf,tipF,T.Wf0,true) + arrow(xf,tipF,T.Wf,false);
+    var tx = function(x,y,t,a,fs,wt,fill){ return '<text x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" text-anchor="'+(a||"middle")+'" font-size="'+(fs||11)+'" font-weight="'+(wt||500)+'" fill="'+(fill||"var(--fg)")+'">'+t+'</text>'; };
+    var topR = tipR-Math.max(14,Math.max(T.Wr,T.Wr0)*ppk), topF = tipF-Math.max(14,Math.max(T.Wf,T.Wf0)*ppk);
+    g += '</g>';
+    g += tx(W-xr, topR-18, "Rear axle "+fmt(T.Wr,1)+" kN", "middle", 12, 600) + tx(W-xr, topR-5, fmt(T.Wr/T.Wt*100,0)+"% of weight", "middle", 10.5, 400, "var(--muted)");
+    g += tx(W-xf, topF-18, "Front axle "+fmt(T.Wf,1)+" kN", "middle", 12, 600) + tx(W-xf, topF-5, fmt(T.Wf/T.Wt*100,0)+"% of weight", "middle", 10.5, 400, "var(--muted)");
+    // drawbar pull
+    if (pull>6){
+      var px0 = hx, px1 = hx-pull;
+      g += '<g transform="translate(640,0) scale(-1,1)"><path d="M'+px0.toFixed(1)+' '+(hy-4).toFixed(1)+' L'+(px1+12).toFixed(1)+' '+(hy-4).toFixed(1)+' L'+(px1+12).toFixed(1)+' '+(hy-11).toFixed(1)+' L'+px1.toFixed(1)+' '+hy.toFixed(1)+' L'+(px1+12).toFixed(1)+' '+(hy+11).toFixed(1)+' L'+(px1+12).toFixed(1)+' '+(hy+4).toFixed(1)+' L'+px0.toFixed(1)+' '+(hy+4).toFixed(1)+' Z" fill="var(--good)" fill-opacity=".85" stroke="rgba(0,0,0,.4)"/></g>';
+      g += tx(W-px0+2, hy-17, "Pull "+fmt(T.DP,1)+" kN", "start", 10.5, 600, "var(--good)");
+    }
+    // direction of travel
+    g += tx(10, 44, "← direction of travel", "start", 10.5, 400, "var(--muted)");
+
+    // wheel labels on the soil
+    function lab(cx, name, tyre, drv, z){
+      var w = 128, y0 = G+44;
+      var s = '<rect x="'+(cx-w/2).toFixed(1)+'" y="'+y0+'" width="'+w+'" height="46" rx="5" fill="var(--surface)" fill-opacity=".92" stroke="var(--line)"/>';
+      s += tx(cx, y0+14, name+" · "+tyre.label, "middle", 11, 600);
+      s += tx(cx, y0+27, drv?"driving wheel":"free-rolling wheel", "middle", 10.5, 500, drv?"#b4601a":"#1f64b0");
+      s += tx(cx, y0+40, "Ø "+fmt(tyre.d,2)+" m · b "+fmt(tyre.b,2)+" m", "middle", 10, 400, "var(--muted)");
+      return s;
+    }
+    g += lab(W-xr,"Rear",tr,rearDrv,zr) + lab(W-xf,"Front",tf,frontDrv,zf);
+
+    // legend
+    var lx = 14;
+    g += '<circle cx="'+(lx+6)+'" cy="14" r="6" fill="#d9822b" stroke="rgba(0,0,0,.5)"/>'+tx(lx+16,18,"Driving wheel","start",10.5,400,"var(--muted)");
+    g += '<circle cx="'+(lx+120)+'" cy="14" r="6" fill="#2f7fd0" stroke="rgba(0,0,0,.5)"/>'+tx(lx+130,18,"Free-rolling wheel","start",10.5,400,"var(--muted)");
+    g += '<path d="M'+(lx+250)+' 8 h8 v8 h-8 Z" fill="#c42b3b" fill-opacity=".85"/>'+tx(lx+264,18,"Axle load","start",10.5,400,"var(--muted)");
+    g += '<path d="M'+(lx+340)+' 8 h8 v8 h-8 Z" fill="none" stroke="var(--fg)" stroke-opacity=".6" stroke-dasharray="3 2"/>'+tx(lx+354,18,"Static load","start",10.5,400,"var(--muted)");
+    g += '<circle cx="'+(lx+448)+'" cy="14" r="6" fill="none" stroke="var(--fg)" stroke-dasharray="3 2"/>'+tx(lx+458,18,"Wheel analysed","start",10.5,400,"var(--muted)");
+    $("scene").innerHTML = g;
+
+    var bits = [];
+    bits.push(CLASSES[classify(S.sand,S.silt,S.clay)].n+", "+CONDS[S.cond].name.toLowerCase()+", moisture "+fmt(S.moist,1)+"% ("+ai.label.toLowerCase()+")");
+    bits.push("cone index "+fmt(ciNow,0)+" kPa");
+    var extra = [];
+    if (nC>0) extra.push("Cracks show because the soil is drier than its reference moisture ("+fmt(soil.wref,1)+"%) and has enough clay to shrink.");
+    if (wet>0) extra.push("The water film shows moisture above the plastic limit.");
+    $("scene-note").textContent = bits.join(", ")+". Rut depth: rear "+fmt(zrT*1000,0)+" mm, front "+fmt(zfT*1000,0)+" mm"+((zrT*k>34||zfT*k>34)?" (drawn capped at the picture limit)":"")+". Tyre diameters and wheelbase are to scale; soil depth (0 to 0.5 m) and grains are schematic. Soil colour follows sand, silt and clay; it darkens with moisture; the horizontal lines get darker and denser as cone index rises. "+extra.join(" ");
+  }
+
+  /* ---------- Indian regions by USDA class (indicative) ---------- */
+  var INDIA = [
+    {tag:"Local", note:"Arid desert and coastal dune soils.", s:[
+      ["Rajasthan (west)","pearl millet, guar, moth bean"],["Gujarat (Kachchh, north)","pearl millet, castor, cumin"],["Kerala (coastal strip)","coconut, cashew"]]},
+    {tag:"Widespread", note:"Arid and semi-arid aeolian and alluvial soils.", s:[
+      ["Rajasthan (central, east)","pearl millet, mustard, clusterbean"],["Haryana (south-west)","pearl millet, mustard, cotton"],["Punjab (south-west)","cotton, wheat"],["Tamil Nadu (sandy tracts)","groundnut, sorghum, sesame"]]},
+    {tag:"Widespread", note:"Upper Indo-Gangetic alluvium and red soils.", s:[
+      ["Punjab","wheat, rice, cotton"],["Haryana","wheat, rice, pearl millet"],["Uttar Pradesh (west)","wheat, sugarcane, rice"],["Tamil Nadu","rice, groundnut, sugarcane"],["Karnataka (south interior)","finger millet, groundnut, maize"],["Telangana and Andhra Pradesh","rice, groundnut, maize"],["Odisha and Jharkhand","rice, pulses, maize"]]},
+    {tag:"Widespread", note:"Gangetic and Brahmaputra alluvium, valley soils.", s:[
+      ["Uttar Pradesh","wheat, rice, sugarcane, potato"],["Punjab and Haryana (central)","wheat, rice"],["Bihar (south)","rice, wheat, pulses"],["West Bengal","rice, jute, potato"],["Madhya Pradesh (parts)","wheat, gram, soybean"],["Himachal Pradesh, Jammu and Kashmir (valleys)","apple, wheat, maize"]]},
+    {tag:"Widespread", note:"Younger alluvium, floodplains and terai.", s:[
+      ["Bihar (north)","rice, wheat, maize, sugarcane"],["Uttar Pradesh (east, terai)","rice, wheat, sugarcane"],["Uttarakhand (terai)","rice, wheat, sugarcane"],["West Bengal (north)","rice, jute, potato"],["Assam (Brahmaputra valley)","rice, mustard, vegetables"]]},
+    {tag:"Local", note:"Fresh river deposits on diaras, chars and khadar land.", s:[
+      ["Bihar (Kosi and Ganga diaras)","maize, wheat, vegetables"],["Assam (Brahmaputra chars)","rice, mustard, vegetables"],["Uttar Pradesh (river khadar)","vegetables, melons, wheat"]]},
+    {tag:"Widespread", note:"Red and laterite soils.", s:[
+      ["Karnataka (south, east)","finger millet, groundnut, pulses"],["Telangana","cotton, rice, pigeon pea"],["Tamil Nadu","millets, groundnut, pulses"],["Odisha","rice, pulses, oilseeds"],["Chhattisgarh","rice, pulses"],["Kerala (laterite midlands)","coconut, rubber, pepper"]]},
+    {tag:"Widespread", note:"Medium black soils and deltaic alluvium.", s:[
+      ["Madhya Pradesh","soybean, wheat, gram"],["Maharashtra (medium black)","soybean, cotton, sorghum, pigeon pea"],["Gujarat","cotton, groundnut, wheat"],["Karnataka (north)","sorghum, cotton, sunflower"],["Andhra Pradesh (delta)","rice, maize, pulses"],["Chhattisgarh (plains)","rice, pulses"],["Tamil Nadu (parts)","rice, cotton, pulses"]]},
+    {tag:"Local", note:"Lowland and deltaic alluvium.", s:[
+      ["West Bengal (south)","rice, jute, vegetables"],["Odisha (coastal)","rice, pulses, jute"],["Assam (lowlands)","rice, mustard"],["Bihar (tal lands)","rice, lentil, gram"]]},
+    {tag:"Local", note:"Lateritic and red soils.", s:[
+      ["Konkan and Goa","rice, mango, cashew"],["Karnataka (coast)","rice, arecanut, coconut"],["Kerala (midlands)","coconut, rubber, pepper"],["Tamil Nadu (red-lateritic)","groundnut, pulses"]]},
+    {tag:"Local", note:"Poorly drained lowlands and deltas.", s:[
+      ["Kerala (Kuttanad)","rice"],["West Bengal (Sundarbans)","rice"],["Assam (lowlands)","rice"]]},
+    {tag:"Widespread", note:"Deep black soils (Vertisols) and deltaic alluvium.", s:[
+      ["Maharashtra","cotton, sorghum, sugarcane, soybean"],["Madhya Pradesh","soybean, wheat, gram"],["Karnataka (north)","cotton, sorghum, chickpea"],["Gujarat","cotton, groundnut, wheat"],["Telangana and Andhra Pradesh (black soils)","cotton, chilli, pigeon pea"],["Tamil Nadu (Cauvery delta)","rice, cotton"],["Andhra Pradesh and Odisha (deltas)","rice"]]}
+  ];
+  var MAPP = {"Andaman and Nicobar":"M479 615L481 620L481 620L481 621L480 622L480 624L479 624L479 625L477 621L476 620L476 617L476 616L479 615ZM477 611L478 613L476 615L475 613L477 612L477 611ZM471 600L471 601L472 601L472 603L470 601L470 600L471 600ZM474 599L474 601L473 600L474 599ZM473 595L474 596L473 597L474 599L473 600L473 599L473 598L473 599L472 597L473 595ZM466 593L466 594L467 596L465 595L466 593ZM460 575L460 577L459 578L458 576L460 575ZM455 542L456 544L456 546L455 548L456 548L455 550L452 549L453 548L452 544L455 542ZM457 530L458 531L457 532L458 533L456 533L457 530ZM449 528L450 528L450 530L449 529L449 528ZM463 519L464 522L462 520L463 519ZM464 517L464 519L464 518L464 517ZM465 516L465 518L464 517L465 516ZM458 515L458 517L459 516L459 519L460 519L459 519L459 520L459 520L458 523L458 524L459 521L460 522L459 526L458 526L458 527L457 527L458 528L458 526L459 527L458 530L457 530L457 529L457 529L456 528L457 527L456 527L456 526L455 526L455 523L455 523L455 521L456 523L457 518L458 515ZM460 514L461 514L461 515L461 516L461 516L461 517L460 517L459 519L459 515L459 514L460 514ZM462 502L463 506L463 507L463 510L462 512L461 511L462 512L460 511L462 514L458 514L458 508L459 507L460 507L460 506L459 507L458 503L460 502L461 502L462 502ZM458 500L458 503L457 504L457 503L458 500ZM464 489L464 491L465 492L464 493L465 493L465 494L464 493L463 493L465 495L464 498L463 500L462 498L462 499L462 498L462 499L462 499L462 501L462 501L461 500L461 502L461 502L460 502L460 500L460 500L460 497L461 497L460 497L461 495L460 494L461 492L461 492L462 490L462 489L463 489L463 489L464 489L464 489Z","Andhra Pradesh":"M248 433L246 434L246 434L248 433ZM309 377L311 378L308 383L307 383L308 383L307 384L299 393L297 393L299 393L299 394L288 400L288 401L286 402L286 404L284 406L283 407L282 407L282 408L271 414L265 419L264 422L266 424L266 420L267 422L266 426L266 426L266 426L266 427L266 428L266 428L265 428L265 429L264 429L265 429L262 430L263 429L262 430L259 432L259 431L259 432L255 434L255 433L254 434L252 433L251 432L251 433L249 433L249 432L247 433L246 434L246 435L246 435L245 436L244 441L243 440L244 441L241 443L241 445L240 444L241 445L240 445L239 444L240 445L238 446L237 446L238 443L237 442L232 443L228 446L227 449L225 449L226 449L226 449L226 450L226 450L224 453L224 456L223 456L224 456L223 459L224 464L226 468L224 469L226 469L226 473L225 475L225 480L227 484L228 489L227 491L224 490L224 489L223 489L223 490L222 490L221 493L218 494L219 495L218 496L217 496L217 494L215 495L214 494L212 493L211 494L212 494L212 496L211 496L210 498L208 497L207 500L204 498L203 498L202 499L203 499L202 499L202 498L199 499L199 500L198 499L197 500L198 501L196 506L195 505L195 506L194 508L192 508L191 506L189 506L190 505L190 503L191 503L192 501L194 502L194 503L193 501L194 501L194 499L196 497L196 496L196 495L196 494L195 495L194 494L192 493L193 493L192 493L193 488L190 488L189 489L189 487L188 487L187 487L187 486L188 486L188 483L186 482L186 483L185 483L185 483L185 481L184 482L182 481L182 483L180 484L180 485L179 484L178 485L179 485L177 485L177 486L175 486L176 484L175 484L175 483L172 483L171 482L170 483L170 482L170 483L169 483L170 485L168 485L167 484L167 485L166 484L168 481L166 479L167 479L165 477L167 476L167 479L169 479L170 480L173 479L174 480L173 482L174 482L175 480L174 480L174 480L173 479L174 478L173 478L173 477L174 477L176 476L176 474L174 473L174 476L174 474L172 474L172 473L170 473L169 476L166 475L166 474L165 473L165 472L166 472L166 470L165 471L163 468L163 464L164 464L164 461L163 461L163 458L168 460L170 457L170 456L169 455L170 455L169 453L168 453L166 450L167 450L168 447L169 447L168 445L168 443L167 443L168 442L172 441L182 443L183 442L186 443L186 442L188 443L190 441L190 439L193 438L196 439L197 438L200 439L201 438L201 437L202 438L203 436L205 435L208 435L208 430L209 429L212 428L219 425L220 426L221 427L222 427L224 424L223 423L223 422L226 419L228 420L230 424L230 423L231 424L233 425L234 424L233 423L234 421L232 421L232 421L229 420L230 420L229 419L230 418L231 420L232 418L233 417L235 418L235 419L238 419L239 417L240 417L239 416L241 416L244 415L245 413L246 413L247 412L249 413L250 411L251 408L252 405L256 403L255 402L256 401L260 399L263 399L264 400L265 399L266 399L266 397L267 397L265 396L267 394L266 393L267 392L266 392L269 389L270 391L270 392L271 392L271 394L271 395L272 394L274 393L275 391L276 392L277 393L279 392L279 391L279 391L280 389L279 389L279 388L282 386L282 385L283 385L286 383L285 382L285 381L285 381L284 381L284 380L286 380L287 381L287 378L288 379L287 380L288 380L290 377L292 381L293 382L292 380L293 380L294 383L297 384L298 385L303 384L303 382L304 383L304 382L305 382L305 380L306 380L307 379L308 380L309 378L308 377L309 377L309 377Z","Arunachal Pradesh":"M522 172L524 175L526 174L527 175L526 177L521 179L523 180L522 181L522 182L526 179L529 178L528 180L531 185L530 186L528 186L528 187L525 189L526 190L524 192L526 192L527 193L528 192L532 191L534 193L536 192L538 194L540 193L545 196L544 197L543 199L545 200L545 200L545 202L544 202L543 202L543 202L536 208L537 210L536 211L541 217L540 218L535 216L536 215L534 213L531 213L529 214L525 214L521 216L518 219L516 220L514 222L513 222L512 224L511 224L509 226L506 227L505 226L505 224L504 223L505 222L504 219L505 220L509 217L509 216L510 215L512 216L516 214L517 215L520 213L519 211L518 211L517 212L517 211L516 212L517 209L515 208L515 205L519 201L512 201L510 202L508 203L507 203L498 205L498 206L491 209L490 208L487 208L487 207L486 208L487 210L485 211L479 217L479 219L476 221L473 221L470 221L464 222L461 220L457 219L457 220L456 221L447 222L447 220L446 219L446 217L446 216L446 215L447 214L446 213L445 210L439 210L437 208L438 205L437 203L442 204L443 205L444 206L449 203L450 203L451 204L454 203L456 204L459 200L457 199L458 197L463 195L464 195L464 194L468 193L468 192L467 191L469 190L470 187L473 186L478 187L479 186L481 187L482 185L482 183L485 181L486 178L490 175L493 175L494 173L497 175L497 177L498 176L501 177L501 177L503 178L505 178L506 179L508 179L510 179L510 177L511 177L511 176L515 173L519 172L521 171L522 172Z","Assam":"M519 201L515 205L515 208L517 209L516 212L517 211L517 212L518 211L519 211L520 213L517 215L516 214L512 216L510 215L509 216L509 217L505 220L504 219L501 222L499 221L496 225L491 227L490 228L490 229L488 231L487 229L486 231L485 233L484 234L482 237L481 240L482 242L478 244L478 241L476 242L477 243L470 249L472 251L472 254L471 255L470 258L468 260L468 261L467 264L466 264L465 266L466 267L465 268L466 268L465 269L464 272L460 273L459 270L458 273L457 273L456 275L455 275L455 277L454 277L453 275L449 275L450 272L449 271L449 266L450 264L450 262L451 262L452 263L454 263L454 261L453 260L454 258L455 258L455 257L457 258L457 257L460 256L459 255L460 253L456 251L457 248L456 249L455 248L454 248L452 245L448 247L448 244L449 242L448 242L448 241L451 238L445 239L444 240L443 238L442 238L440 239L440 241L439 242L438 241L438 240L437 239L435 242L436 243L433 243L431 246L430 244L430 243L427 244L427 242L426 242L426 241L425 242L423 241L422 242L422 242L422 241L421 241L420 242L420 241L419 241L418 242L418 241L417 240L411 241L410 241L407 244L407 245L406 245L408 248L406 249L405 250L406 248L405 244L406 241L405 241L406 240L405 240L404 239L404 240L404 238L402 236L403 236L402 236L403 235L403 235L403 235L403 234L404 234L404 233L405 232L405 232L406 231L406 225L410 225L412 225L412 223L414 223L416 222L418 224L421 225L428 224L428 224L433 224L434 223L436 224L439 224L442 222L446 223L447 222L456 221L457 220L457 219L461 220L464 222L476 221L479 219L479 217L485 211L487 210L486 208L487 207L487 208L490 208L491 209L498 206L498 205L507 203L508 203L510 202L512 201L519 201Z","Bihar":"M299 210L301 211L302 212L308 213L310 216L309 219L315 221L315 222L316 222L316 223L319 223L319 225L321 225L327 223L329 224L329 227L331 228L331 229L334 227L338 228L340 228L347 232L350 231L354 228L354 231L355 232L357 232L357 233L359 233L359 232L361 231L364 232L365 231L367 232L367 231L368 231L369 230L371 233L373 231L373 229L374 230L375 229L374 230L376 232L375 232L376 233L371 237L370 237L370 238L368 239L367 242L368 243L369 243L369 245L372 246L371 248L372 250L370 249L368 251L367 251L367 253L368 254L368 256L363 253L362 254L361 254L361 256L358 256L358 258L356 258L355 260L355 262L354 264L353 268L351 267L351 269L349 269L348 268L346 269L345 268L343 270L342 273L339 271L340 268L336 268L336 266L335 265L335 264L333 265L332 264L329 264L328 266L327 266L328 268L326 268L325 270L324 269L321 269L321 270L318 271L319 271L317 272L317 271L313 273L313 271L312 271L312 270L312 269L309 271L309 272L307 272L307 272L306 274L306 273L305 273L302 271L303 270L302 269L302 269L300 269L300 270L300 269L299 270L298 268L297 267L296 269L294 269L292 270L288 269L288 268L288 267L287 265L285 264L284 260L285 256L291 252L292 252L294 251L293 251L295 249L298 247L299 246L300 245L301 247L302 247L303 245L306 246L307 246L307 246L307 245L309 245L308 244L307 243L307 242L300 240L299 239L298 238L297 235L300 235L300 233L298 232L297 231L295 231L295 230L298 229L298 227L302 228L305 228L304 227L303 226L302 225L301 225L301 223L300 223L299 222L298 222L298 219L297 219L297 218L296 218L297 216L295 215L295 214L294 214L295 213L294 211L297 211L299 210Z","Chandigarh":"M164 145L163 147L161 145L163 144L164 145Z","Chhattisgarh":"M284 278L288 279L289 283L291 284L292 286L293 288L296 289L296 288L297 287L297 289L296 292L298 293L298 293L297 297L299 298L300 301L300 299L301 300L304 300L304 302L301 305L301 307L298 307L297 309L296 310L298 311L297 313L294 313L292 315L290 316L289 318L289 319L288 319L288 321L289 322L289 323L287 324L287 325L286 326L287 327L287 328L286 327L285 328L284 330L286 333L283 332L283 334L282 335L282 337L281 338L277 336L272 337L271 339L269 342L268 343L266 342L267 347L266 349L268 351L267 353L268 354L267 357L267 359L271 360L273 360L273 363L271 364L271 363L268 362L266 363L264 360L263 360L261 359L260 360L259 358L257 359L257 362L259 363L259 364L261 364L260 370L261 370L262 371L263 372L262 373L263 373L263 377L264 378L264 382L263 382L263 384L261 385L261 386L259 386L259 387L258 387L259 389L257 390L255 393L253 393L251 395L250 400L249 402L249 402L248 404L244 403L242 404L240 398L241 397L239 397L239 396L238 395L237 397L236 396L236 396L237 395L236 392L232 387L229 388L227 385L229 384L228 380L230 375L233 372L234 374L235 373L235 374L237 374L238 373L237 371L239 371L238 369L235 368L235 366L233 364L233 364L231 363L232 364L230 364L232 363L230 361L232 361L233 359L232 357L230 357L230 356L230 355L234 353L234 352L234 348L232 348L232 348L233 346L233 341L231 341L231 340L231 337L234 335L235 334L235 333L236 331L236 326L236 325L238 325L238 323L238 321L239 318L240 318L241 319L241 319L241 318L241 317L242 315L243 314L243 311L245 310L245 311L246 310L247 310L247 310L248 310L249 311L251 309L253 309L253 307L255 307L255 303L259 301L259 298L262 298L263 297L263 294L262 292L261 292L260 292L259 292L258 289L257 290L255 289L252 290L252 288L254 286L252 283L253 282L253 282L256 284L258 283L261 284L264 283L264 284L269 284L270 284L272 283L272 282L275 281L277 283L281 282L284 278Z","Dadra and Nagar Haveli and Daman and Diu":"M97 358L96 359L94 358L94 359L93 357L92 357L92 355L91 355L92 355L93 354L93 354L95 353L95 354L96 354L94 355L94 357L95 357L96 356L97 356L96 357L97 358ZM91 351L90 352L91 352L91 353L89 353L90 351L91 351ZM54 345L56 346L54 346L53 346L54 345Z","Goa":"M109 444L110 445L111 448L115 446L116 447L116 449L116 450L117 454L116 455L117 456L116 458L117 459L115 462L114 461L114 462L112 462L112 460L110 458L111 456L109 453L107 452L110 452L110 451L107 451L108 450L107 450L106 448L107 447L106 448L105 445L107 445L109 444Z","Gujarat":"M10 294L11 295L10 295L10 294ZM9 290L9 292L9 291L8 292L9 290ZM7 284L8 284L7 287L6 288L5 288L6 287L4 288L4 287L6 287L4 287L6 286L7 284ZM6 284L6 285L5 285L5 286L5 285L6 284ZM9 283L10 285L9 285L9 284L9 285L8 285L8 284L9 283ZM7 282L8 284L8 284L7 283L7 284L6 284L7 282ZM8 281L8 283L8 282L6 283L7 282L8 281ZM10 281L11 282L10 283L9 282L10 282L10 281ZM9 281L10 282L8 283L9 281L8 281L9 281ZM7 280L8 281L6 282L6 284L5 284L4 286L4 285L4 285L4 283L5 283L5 283L6 282L5 282L6 282L7 280ZM86 331L87 330L88 329L86 329L85 328L86 328L90 327L84 326L86 321L85 322L84 322L84 317L85 316L88 317L89 315L90 316L91 315L90 315L90 314L88 315L86 314L84 315L84 314L83 316L83 315L81 314L82 313L81 312L82 315L82 316L81 315L81 317L81 316L81 318L80 316L80 317L79 321L79 319L80 319L80 318L79 318L78 320L77 319L78 320L78 321L77 320L79 322L79 325L78 324L79 324L80 327L79 331L76 334L76 336L71 339L65 341L64 343L63 343L57 345L53 345L53 345L53 346L52 346L45 343L39 338L33 331L33 331L23 321L18 315L17 314L20 310L20 312L22 312L21 314L23 315L25 313L28 313L28 312L28 311L30 313L29 314L32 312L31 311L32 311L33 312L34 310L35 311L37 309L40 309L46 298L45 299L44 301L44 301L41 300L41 301L40 301L39 301L40 300L39 301L39 301L40 302L33 303L32 305L30 304L30 305L22 303L14 298L11 296L12 296L11 295L12 295L12 294L13 294L12 294L9 291L9 287L14 282L11 283L10 285L10 284L12 282L10 282L10 281L14 281L14 274L15 274L16 276L17 274L19 276L20 275L22 275L24 274L29 274L32 277L37 277L39 274L48 272L48 272L47 273L48 275L53 275L54 275L53 274L55 273L56 273L58 272L56 271L55 269L56 267L57 266L61 268L62 267L63 267L65 266L67 267L68 267L70 267L71 268L72 266L73 267L75 266L77 268L81 268L79 268L82 270L83 272L83 272L84 270L87 271L88 273L90 273L91 273L92 273L92 272L93 271L94 270L94 272L96 273L97 273L95 274L94 276L97 278L96 279L97 280L100 277L101 281L99 283L99 284L102 286L102 288L103 287L105 288L104 291L106 291L106 292L107 291L108 291L109 293L111 292L112 294L113 294L114 296L115 297L116 296L118 299L118 301L119 302L120 302L120 303L118 307L116 307L114 310L112 309L112 310L113 310L113 312L115 310L117 312L115 313L115 314L113 313L113 316L113 316L114 318L115 318L113 320L114 321L108 324L109 327L107 328L109 330L112 329L115 329L115 329L117 329L117 330L116 331L113 331L112 330L112 332L110 332L110 334L108 335L108 337L104 337L103 337L105 338L107 338L107 339L108 338L107 339L109 340L110 345L108 346L108 348L105 349L104 347L103 347L102 347L102 346L101 346L100 347L102 349L100 352L101 356L98 356L98 357L97 358L96 357L97 356L96 356L95 357L94 357L94 355L96 354L95 354L95 353L93 354L93 354L92 355L91 354L92 356L90 355L89 357L88 357L88 356L88 355L88 353L89 353L91 353L91 352L90 352L91 351L90 351L91 348L89 342L90 341L88 341L88 339L88 339L87 339L88 337L87 337L86 338L86 338L86 336L86 335L85 335L85 334L87 331L86 331L86 331Z","Haryana":"M164 142L165 142L166 144L167 144L167 145L169 145L170 146L170 148L169 149L171 150L174 151L175 152L175 151L175 152L177 151L178 153L175 157L175 158L172 159L169 165L170 166L169 169L170 171L169 173L170 173L169 178L171 180L171 181L171 182L170 183L168 182L166 184L166 187L165 187L164 188L165 190L167 190L167 189L168 190L170 192L172 192L172 190L173 190L176 192L176 194L176 195L177 195L177 196L176 196L177 196L176 198L177 201L171 204L171 204L169 205L168 204L167 205L169 205L167 205L167 207L165 207L165 206L165 206L165 206L166 197L165 196L161 198L161 200L158 201L158 199L157 199L158 199L157 198L158 198L157 197L155 197L154 196L155 198L154 198L155 199L155 200L153 199L152 199L152 199L151 200L153 203L152 204L150 203L148 203L148 202L147 201L148 201L148 199L149 199L148 199L147 198L149 197L150 197L147 193L144 192L144 191L142 189L141 188L140 188L139 182L139 180L138 180L137 177L137 176L137 175L136 175L136 174L134 175L133 175L131 175L131 174L129 174L129 173L127 172L125 173L123 173L123 173L122 173L121 171L122 171L123 169L122 169L123 165L120 165L120 164L122 163L121 162L121 161L123 162L124 161L126 160L128 161L130 163L132 162L132 164L133 164L133 163L134 165L133 167L134 168L134 169L135 169L136 167L136 167L136 166L138 164L141 165L143 165L143 164L144 164L146 165L149 165L150 164L153 163L152 161L152 161L152 160L153 158L152 157L152 157L155 158L155 157L156 158L156 156L157 158L158 158L160 156L159 155L158 156L159 155L162 153L162 152L164 151L165 153L166 152L165 151L166 148L165 146L164 147L164 144L163 142L164 141L164 142Z","Himachal Pradesh":"M163 95L164 95L164 97L165 98L166 99L170 100L170 102L170 101L173 104L174 102L176 103L180 100L180 101L182 102L181 103L184 105L184 106L185 108L193 105L193 108L191 109L191 110L192 111L193 109L194 110L194 111L195 112L194 115L197 116L197 118L200 120L199 124L199 126L200 126L201 128L199 130L200 131L200 132L201 133L201 133L204 138L202 138L200 136L198 136L197 135L194 136L192 134L186 137L184 137L182 139L182 141L181 141L181 142L182 142L182 143L181 142L180 145L182 147L182 148L181 148L182 149L178 152L178 152L177 151L175 152L175 151L175 152L174 151L171 150L169 149L170 146L169 145L167 145L167 144L166 144L165 142L164 143L164 141L163 142L160 140L160 138L160 138L160 136L160 136L159 136L160 135L159 134L159 135L157 134L157 134L155 131L154 134L152 134L151 133L151 132L147 124L148 124L147 121L141 118L142 117L142 116L142 115L144 115L147 112L146 110L147 107L147 105L145 102L146 101L147 102L148 102L150 100L153 99L156 96L159 96L160 97L162 96L163 95Z","Jammu and Kashmir":"M125 20L127 20L128 22L130 20L132 21L134 19L136 19L136 20L138 21L137 22L139 24L141 25L144 29L150 31L153 33L155 33L156 34L156 35L159 37L160 36L162 38L163 39L162 41L163 43L166 44L169 44L171 46L174 46L176 49L173 49L175 51L180 50L180 50L185 51L184 50L185 48L188 49L189 47L190 47L191 46L193 45L193 44L195 45L198 43L203 42L206 43L208 42L208 40L211 40L212 42L218 44L220 44L223 43L225 46L228 48L229 51L228 51L226 57L226 60L224 63L224 66L220 66L218 67L219 68L218 69L219 69L219 70L213 71L214 72L215 75L213 76L213 77L212 78L212 80L207 79L206 80L204 79L203 79L202 80L204 84L205 84L204 86L206 86L206 88L202 87L203 91L204 93L212 95L211 98L211 99L210 100L216 105L212 109L210 108L208 110L207 110L206 112L205 112L204 113L201 111L200 106L197 108L196 108L194 108L192 111L191 110L191 109L193 108L193 105L185 108L184 106L184 105L181 103L182 102L180 101L180 100L176 103L174 102L173 104L170 101L170 102L170 100L166 99L165 98L164 97L164 95L163 95L162 96L160 97L159 96L156 96L153 99L150 100L148 102L145 101L145 102L147 105L147 107L145 110L144 110L143 112L140 113L139 114L139 113L135 113L133 112L132 112L132 111L130 110L129 111L128 110L124 110L123 108L124 107L123 106L124 103L123 104L123 105L121 105L120 104L118 105L115 102L111 101L110 100L108 100L107 101L106 99L104 98L105 96L103 93L104 89L103 88L104 86L103 84L104 82L102 80L102 74L101 74L100 72L101 69L105 69L106 67L105 66L107 64L110 64L112 62L113 61L112 60L113 60L112 59L114 58L113 57L112 57L108 55L106 55L106 53L107 51L107 49L105 49L100 49L98 47L95 46L96 43L95 42L91 43L90 42L87 43L85 43L84 41L85 39L84 39L85 37L84 36L85 35L87 35L90 33L90 31L93 31L93 30L95 28L94 26L101 25L104 26L109 26L109 25L106 23L106 22L109 22L112 24L114 23L114 22L116 22L119 20L122 21L122 19L124 18L125 20Z","Jharkhand":"M364 254L365 254L366 255L367 255L367 258L369 259L370 262L368 265L369 266L369 267L369 268L369 268L368 269L367 268L367 269L367 270L368 270L367 272L367 272L366 274L364 275L365 277L363 277L364 277L363 278L362 278L362 279L360 280L361 280L357 279L358 282L357 283L357 282L357 283L355 283L356 284L355 284L350 282L350 284L350 283L349 283L349 285L349 286L342 287L341 289L341 290L339 292L338 292L338 291L337 290L337 289L335 288L334 289L335 290L331 291L332 293L331 295L331 296L332 297L335 297L338 300L344 300L344 301L342 301L342 302L342 304L343 306L344 306L345 306L346 308L348 308L349 310L348 311L350 312L349 313L350 314L350 315L349 315L349 316L348 316L343 313L342 314L339 311L336 310L335 309L333 311L334 311L334 313L335 314L333 315L334 316L332 321L329 320L330 318L331 318L330 318L328 319L327 318L325 318L323 317L321 318L320 320L317 318L315 318L316 318L317 314L317 314L317 310L313 312L312 311L311 312L307 312L305 313L302 313L300 312L299 311L297 310L297 309L298 307L301 307L301 305L304 303L304 301L304 300L301 300L300 299L300 301L299 298L297 297L298 293L298 293L296 292L297 289L297 287L296 288L296 289L293 288L292 286L291 284L289 283L288 279L284 278L286 275L285 274L287 273L286 272L286 270L294 269L296 269L297 267L298 268L299 270L300 269L300 270L300 269L302 269L302 269L303 270L302 271L305 273L306 273L306 274L307 272L307 272L309 272L309 271L312 269L312 270L312 271L313 271L313 273L317 271L317 272L319 271L318 271L321 270L321 269L324 269L325 270L326 268L328 268L327 266L328 266L329 264L332 264L333 265L335 264L335 265L336 266L336 268L340 268L339 271L342 273L343 270L345 268L346 269L348 268L349 269L351 269L351 267L353 268L354 264L355 263L355 260L356 259L358 258L358 256L361 256L362 254L362 254L363 253L364 254Z","Karnataka":"M173 391L174 391L174 392L175 392L174 394L175 394L176 395L176 394L178 394L177 396L178 398L177 399L179 401L176 404L177 405L175 406L175 408L176 409L177 408L178 409L180 410L176 411L177 412L175 413L175 414L174 416L174 417L176 418L176 420L175 422L176 424L175 424L175 426L176 426L176 426L175 427L176 427L176 428L174 429L175 430L174 430L171 431L173 432L178 433L178 434L176 435L176 441L170 441L168 442L167 443L168 443L168 445L169 447L169 447L168 447L167 450L166 450L168 453L169 453L170 455L169 455L170 457L168 460L163 458L163 461L164 461L164 464L163 464L163 468L165 471L166 470L166 472L165 472L165 473L166 474L166 475L169 476L170 473L172 473L172 474L174 474L174 476L175 476L174 473L176 475L176 477L175 476L173 477L173 478L174 478L173 479L174 480L174 480L175 480L174 482L173 482L174 480L173 479L170 480L169 479L167 479L167 476L165 477L167 479L166 479L168 481L166 484L167 485L167 484L168 485L170 485L169 483L170 483L170 482L170 483L171 482L172 483L175 483L175 484L176 484L175 486L176 486L176 486L177 486L177 485L179 485L179 484L180 485L180 484L182 483L182 481L184 482L185 481L185 483L185 483L186 483L186 482L188 483L188 486L187 486L187 487L188 487L189 487L189 489L190 488L193 488L192 493L193 493L192 493L194 494L195 495L196 494L196 495L196 496L196 497L194 499L194 501L193 501L194 503L194 502L192 501L191 503L190 503L190 505L188 504L186 503L186 503L186 504L185 503L184 503L184 502L182 503L182 503L182 504L181 507L178 507L178 509L178 510L178 510L179 510L179 512L177 514L176 515L176 516L181 516L181 518L179 521L176 521L175 525L172 524L169 525L169 526L167 524L166 525L165 524L164 527L164 528L159 528L158 526L156 527L156 525L155 525L154 524L153 524L152 523L150 523L150 520L148 521L146 521L145 518L142 518L139 514L138 514L138 513L137 512L138 510L136 511L135 509L136 508L135 508L134 509L134 507L132 507L133 506L131 506L131 507L131 506L130 505L130 504L127 505L124 493L124 491L125 492L124 491L125 491L124 491L124 487L125 487L124 487L124 486L124 486L124 486L124 487L123 483L121 480L119 475L121 475L120 474L119 474L118 470L118 470L118 471L119 471L118 469L117 470L117 468L119 468L117 468L116 465L115 466L113 464L116 463L115 462L114 463L113 462L116 461L117 456L116 455L117 454L116 450L116 449L116 447L113 447L115 444L116 445L118 444L118 443L118 443L118 442L119 443L118 442L120 439L118 439L119 438L120 438L120 435L118 434L117 435L117 432L118 433L118 432L117 431L117 430L116 430L116 430L116 429L117 430L117 429L118 429L119 428L120 428L120 427L121 427L122 429L124 428L123 427L124 426L128 425L128 423L129 422L129 421L131 421L134 423L135 422L135 421L138 420L139 421L140 421L140 420L142 421L142 419L142 419L142 418L141 417L142 415L141 412L141 412L142 410L145 413L145 412L146 412L146 412L147 413L149 413L150 413L151 413L152 414L152 413L153 412L153 413L155 413L155 414L156 413L155 412L155 411L155 411L155 410L155 410L155 410L155 408L157 407L158 405L159 405L159 406L160 405L161 406L162 404L163 403L162 403L162 402L163 403L165 402L165 399L166 398L165 398L166 396L169 397L169 396L171 394L171 392L173 391Z","Kerala":"M130 504L130 505L131 506L131 507L131 506L133 506L132 507L134 507L134 509L135 508L136 508L135 509L136 511L138 510L137 512L138 513L138 514L139 514L141 517L143 519L145 518L146 521L148 521L150 520L151 523L152 523L153 524L154 524L155 525L156 525L157 527L153 529L153 531L156 531L158 533L159 534L157 535L157 536L160 536L161 535L162 536L161 537L162 537L162 539L163 539L162 539L161 541L164 543L165 544L165 547L163 547L164 554L167 556L170 553L171 553L172 555L172 556L172 557L171 558L172 561L171 562L172 564L170 568L172 569L174 568L174 569L175 570L172 574L172 577L170 580L172 583L171 584L170 585L172 589L172 590L171 590L171 591L170 592L170 594L169 594L167 592L159 582L155 572L153 561L149 550L150 549L149 549L149 550L147 544L145 537L143 532L141 530L140 526L136 523L136 521L135 520L135 521L134 520L134 520L127 505L130 504Z","Lakshadweep":"M113 536L111 535L111 533L113 534L114 535L113 536ZM71 523L70 523L70 523L69 521L70 520L71 523ZM79 560L79 559L80 557L80 558L79 560ZM77 530L77 529L77 528L77 530ZM76 536L75 538L74 536L76 536L76 536ZM72 514L72 512L73 513L72 514ZM94 593L94 594L93 595L94 593ZM105 559L104 558L105 557L105 559Z","Madhya Pradesh":"M192 223L193 224L196 225L199 224L202 226L203 226L203 227L204 226L204 229L205 230L205 231L206 231L206 233L207 233L205 235L205 235L204 235L205 236L204 236L204 237L203 237L204 238L201 243L202 244L201 244L201 244L199 245L201 247L201 248L198 249L194 249L193 251L192 251L191 253L194 258L192 258L192 260L189 263L191 267L190 269L190 270L192 272L192 273L193 275L195 272L198 275L200 275L200 276L202 276L203 273L204 271L202 271L203 270L203 270L202 267L199 268L200 264L197 261L197 259L197 258L196 255L193 254L195 254L195 253L196 253L196 252L198 251L199 252L198 252L200 253L199 252L201 251L200 251L199 250L201 251L201 251L201 251L201 250L202 249L203 249L202 251L203 251L204 253L203 253L202 253L203 252L202 252L200 254L201 256L202 253L203 253L204 254L202 255L202 257L203 256L204 256L204 255L204 255L205 256L205 257L206 256L206 258L207 258L208 257L209 258L208 257L209 257L209 258L210 257L209 255L211 256L210 255L209 255L210 253L211 253L211 255L211 254L212 255L213 255L211 257L212 258L213 257L213 258L215 257L215 257L218 257L220 258L220 255L223 255L223 253L225 253L227 252L228 252L228 254L230 255L231 257L229 257L229 259L228 259L228 259L228 260L230 260L229 259L231 258L232 259L231 259L231 260L233 260L231 258L234 259L234 257L234 258L234 258L235 258L235 259L237 259L236 257L238 257L238 258L238 256L239 256L239 257L238 261L243 261L244 262L244 261L245 261L245 260L246 259L246 257L247 257L247 258L247 257L249 257L249 258L250 259L251 258L250 257L252 256L253 257L252 259L253 258L256 260L258 260L258 262L259 263L260 263L262 264L263 264L263 265L264 265L264 265L264 267L265 267L265 268L267 268L268 266L270 267L272 266L275 268L275 269L273 269L273 270L273 272L274 273L274 274L273 277L272 277L274 278L274 280L275 281L272 282L271 283L269 284L264 284L264 283L261 284L258 283L256 284L255 283L253 282L252 282L254 286L252 288L252 290L255 289L257 290L258 289L259 292L260 292L261 292L262 292L263 294L263 297L262 298L259 298L259 301L255 303L255 307L253 307L253 309L251 309L249 311L248 310L247 310L247 310L246 310L245 311L245 310L243 311L243 314L242 315L241 317L241 318L241 319L241 319L240 318L239 318L238 321L238 323L238 325L236 325L236 326L236 331L235 333L234 333L232 332L230 332L230 330L227 328L226 327L224 329L221 329L221 330L218 328L214 329L213 327L208 326L208 327L207 327L206 328L202 328L203 330L200 331L199 330L199 331L195 329L194 330L193 328L193 328L192 328L190 328L189 329L189 330L184 332L182 332L181 333L180 332L178 333L177 332L176 332L175 329L178 329L178 329L177 326L176 325L172 325L172 326L171 326L168 326L165 328L163 328L163 330L163 331L160 333L161 334L160 336L157 336L157 338L155 338L152 338L150 337L152 336L150 333L134 332L132 331L131 329L128 327L126 328L122 326L121 326L121 322L120 321L119 320L117 321L114 321L114 320L113 320L115 318L114 318L113 316L113 316L113 313L115 314L115 313L117 312L115 310L113 312L113 310L112 310L112 309L114 310L116 307L118 307L120 303L120 302L119 302L118 301L117 299L118 298L121 298L124 296L125 296L124 296L124 295L121 294L121 293L123 291L129 287L128 283L130 279L128 276L128 275L125 274L127 271L124 270L126 267L126 266L126 264L128 267L130 266L130 265L127 264L127 261L129 263L131 263L132 262L133 259L136 259L136 262L135 261L135 262L135 262L138 262L138 263L136 264L134 262L135 263L133 265L134 266L138 266L141 266L141 266L144 265L145 265L145 268L147 269L147 271L146 272L145 271L143 272L145 275L144 276L144 277L145 278L145 279L143 281L142 279L141 280L139 279L138 282L140 283L141 284L142 284L143 285L143 283L143 282L144 283L148 281L148 280L151 278L151 276L152 273L152 276L154 275L156 276L157 275L158 277L159 276L159 275L161 274L161 276L161 277L162 277L163 278L165 277L166 276L164 273L164 271L164 269L165 269L165 270L166 271L168 269L167 266L166 265L164 265L163 264L166 263L164 260L167 258L169 259L170 258L172 258L173 258L174 258L174 256L175 256L173 255L174 254L173 254L174 252L172 252L171 254L168 253L166 255L165 254L163 254L159 251L157 246L158 245L158 244L159 243L162 242L165 238L169 235L171 235L173 233L175 233L175 232L177 232L182 229L184 227L185 226L187 226L188 224L189 224L189 223L190 224L191 223L192 223Z","Maharashtra":"M120 320L120 321L121 322L121 326L122 327L126 328L128 327L131 329L132 331L135 332L150 333L152 336L150 337L151 338L151 338L154 339L157 338L157 336L160 336L161 334L160 333L163 331L163 330L163 328L165 328L168 326L171 326L172 326L172 325L176 325L177 326L178 329L178 329L175 329L176 332L177 332L178 333L180 332L181 333L182 332L184 332L189 330L189 329L190 328L192 328L193 328L193 328L194 330L195 329L199 331L199 330L200 331L203 330L202 328L206 328L207 327L208 327L208 326L213 327L214 329L218 328L221 330L221 329L224 329L226 327L227 328L230 330L230 332L232 332L235 334L234 335L231 337L231 338L231 341L233 341L233 346L232 348L232 348L234 348L234 352L234 353L230 355L230 356L230 357L232 357L233 359L232 361L230 361L232 363L230 364L232 364L231 363L233 364L233 364L235 366L235 368L238 369L239 371L237 371L238 373L237 374L235 374L235 373L234 374L233 372L231 373L230 375L228 380L229 384L227 385L227 386L225 386L221 383L222 383L221 379L220 379L220 378L222 377L221 375L222 372L219 368L216 368L215 370L214 369L213 370L209 368L208 371L207 371L206 369L203 369L204 367L201 367L201 365L197 364L195 364L191 362L191 363L192 364L192 366L191 367L191 368L191 369L191 371L189 372L189 375L186 375L185 373L183 374L184 375L183 376L183 378L182 378L181 379L184 384L182 384L182 386L181 386L181 386L181 389L178 389L178 390L177 391L178 391L177 391L177 392L177 393L178 394L176 395L175 394L174 394L175 392L174 392L174 391L173 391L171 392L171 394L169 396L169 397L166 396L165 398L166 398L165 399L165 402L163 403L162 402L162 403L163 403L162 404L161 406L160 405L159 406L159 405L158 405L157 407L155 408L155 410L155 410L155 410L155 411L155 411L155 412L156 413L155 414L155 413L153 413L153 412L152 413L152 414L151 413L150 413L149 413L147 413L146 412L146 412L145 412L145 413L142 410L141 412L141 412L142 415L141 417L142 418L142 419L142 419L142 421L140 420L140 421L139 421L138 420L135 421L135 422L134 423L131 421L129 421L129 422L128 423L128 425L124 426L123 427L124 428L122 429L121 427L120 427L120 428L119 428L118 429L117 429L117 430L116 429L116 430L116 430L117 430L117 431L118 432L118 433L117 432L117 435L119 434L121 436L120 438L119 438L118 439L120 439L118 442L119 443L118 442L118 443L118 443L118 444L116 445L115 444L114 446L114 446L113 447L113 447L112 448L111 447L110 445L109 445L109 444L108 445L105 445L104 443L102 441L101 439L101 437L101 438L100 433L101 433L100 432L101 432L100 432L99 429L99 429L99 428L100 428L100 428L100 427L99 427L99 426L98 425L98 421L99 421L98 420L98 419L99 418L96 414L97 414L96 412L97 411L95 409L94 403L95 403L93 401L93 400L94 399L93 399L92 396L91 396L92 394L91 393L91 391L91 389L91 389L90 387L89 381L89 381L90 378L89 377L89 373L87 369L87 366L87 366L88 364L86 364L86 361L87 361L89 362L87 358L88 357L89 357L90 355L92 356L92 357L93 357L93 359L94 358L96 359L98 356L100 356L100 352L102 349L100 347L101 346L102 347L103 347L105 349L108 348L108 346L110 345L109 340L107 339L108 338L107 339L107 338L105 338L103 337L104 337L108 337L108 335L110 334L110 332L112 332L112 330L113 331L117 330L117 329L117 329L115 329L115 329L112 329L109 330L107 328L109 327L109 326L108 324L114 321L117 321L118 320L120 320Z","Manipur":"M493 247L492 250L495 251L493 256L496 257L496 260L493 266L492 266L492 267L490 270L489 273L488 273L485 283L484 283L484 282L481 281L479 282L478 280L475 280L475 281L474 280L473 281L470 278L470 279L468 280L468 278L468 279L466 278L465 279L465 278L463 278L464 273L464 272L464 272L465 269L466 268L465 268L466 267L465 266L466 264L467 264L468 261L468 260L470 258L471 255L472 254L473 255L475 256L476 253L479 251L478 249L479 249L481 249L482 248L484 249L486 249L486 250L488 250L490 249L490 248L491 248L493 246L493 247Z","Meghalaya":"M442 238L444 240L448 238L451 239L448 241L448 242L449 242L448 244L448 247L452 245L454 248L455 248L456 249L457 248L456 251L460 253L459 255L460 256L457 257L457 258L455 257L455 258L454 258L454 259L452 259L446 256L440 257L438 258L438 257L435 257L431 256L422 257L420 256L416 257L410 256L407 254L405 254L405 252L406 249L408 248L406 245L407 245L407 244L410 241L411 241L417 240L418 241L418 242L419 241L420 241L420 242L421 241L422 241L422 242L422 242L423 241L425 242L426 241L426 242L427 242L427 244L430 243L430 244L431 246L433 243L436 243L435 242L437 239L438 240L438 241L439 242L440 241L440 239L442 238L442 238Z","Mizoram":"M460 272L460 273L462 272L464 272L464 275L463 278L465 278L465 279L466 278L468 279L468 278L468 280L470 279L472 286L471 292L470 293L471 297L469 300L467 299L466 299L467 302L465 304L466 308L466 309L467 312L467 315L466 315L466 316L464 316L465 318L464 318L464 320L463 319L462 321L461 319L458 317L458 320L456 320L456 317L456 317L456 317L455 306L453 302L452 301L452 299L452 295L453 295L450 284L451 282L451 277L451 275L453 275L454 277L455 277L455 275L456 275L457 273L458 273L459 270L460 272Z","Nagaland":"M505 221L505 222L504 223L505 224L505 226L504 228L502 231L503 232L503 238L504 239L501 242L502 245L499 247L499 249L498 249L497 250L494 251L492 250L493 247L493 246L491 248L490 248L490 249L488 250L486 250L486 249L484 249L482 248L481 249L479 249L478 249L479 251L476 253L475 256L473 255L472 253L472 251L470 249L477 243L476 242L478 241L478 244L482 242L481 240L482 237L484 234L485 233L486 231L487 229L488 231L490 229L490 228L491 227L496 225L499 221L501 222L504 219L505 221Z","Delhi":"M169 183L170 183L171 183L171 184L173 186L173 188L173 189L173 190L172 190L171 192L169 191L168 190L167 189L167 190L165 190L164 189L165 187L166 187L166 184L169 183Z","Puducherry":"M218 540L220 540L220 543L219 543L219 542L217 541L218 540ZM218 523L219 523L219 524L217 524L218 523ZM216 522L216 523L215 523L216 522ZM216 519L216 521L216 522L216 519ZM217 520L218 520L218 520L218 522L219 520L220 521L219 523L216 522L217 522L218 522L217 521L217 520L216 520L217 520ZM264 425L265 425L264 426L263 425L264 425Z","Punjab":"M146 110L147 112L142 115L142 116L142 117L141 118L147 121L148 124L147 124L151 132L151 133L152 134L154 134L155 131L157 134L157 134L159 135L159 134L160 135L159 136L160 136L160 136L160 138L160 138L160 140L162 141L164 144L163 145L163 144L161 145L162 146L164 147L165 146L166 148L165 151L166 152L165 153L164 151L162 152L162 153L159 155L158 156L159 155L160 156L158 158L157 158L156 156L156 158L155 157L155 158L152 157L152 157L153 158L152 160L152 161L152 161L153 163L150 164L149 165L146 165L144 164L143 164L143 165L141 165L138 164L136 166L136 167L136 167L135 169L134 169L134 168L133 167L134 165L133 163L133 164L132 164L132 162L130 163L128 161L126 160L124 161L123 162L121 161L109 161L109 159L111 158L111 155L109 153L111 151L110 151L110 150L111 151L111 149L113 149L113 148L117 145L116 145L118 143L118 142L119 141L121 140L122 139L124 139L124 138L123 137L122 138L121 137L121 134L122 132L123 132L123 131L122 130L123 129L120 126L122 125L123 122L127 121L128 119L130 119L133 119L134 118L135 118L136 116L137 115L136 114L136 113L139 113L139 114L140 113L143 112L146 108L146 110Z","Rajasthan":"M109 160L121 161L121 162L122 163L120 164L120 165L123 165L122 169L123 169L122 171L121 171L122 173L123 173L123 173L125 173L127 172L129 173L129 174L131 174L131 175L133 175L134 175L136 174L136 175L137 175L137 176L137 177L138 180L139 180L139 182L140 188L141 188L142 189L144 191L144 192L147 193L150 197L149 197L147 198L148 199L149 199L148 199L148 201L147 201L148 202L148 203L150 203L152 204L153 203L151 200L152 199L152 199L153 199L155 200L155 199L154 198L155 198L154 196L155 197L157 197L158 198L157 198L158 199L157 199L158 199L158 201L161 200L161 198L163 197L163 196L165 196L166 197L165 205L165 207L167 207L167 205L169 205L167 205L168 204L169 205L171 204L171 204L173 204L173 207L173 208L174 208L173 210L175 211L175 212L178 214L178 213L178 214L180 216L176 218L179 220L180 219L180 220L181 220L175 223L175 225L176 225L176 223L178 223L181 221L184 222L184 222L186 222L186 223L186 222L187 222L188 221L190 222L189 222L190 223L189 224L189 224L187 224L187 226L185 226L184 227L182 229L177 232L175 232L175 233L173 233L171 235L169 235L165 238L162 242L159 243L158 244L158 245L157 246L159 251L163 254L165 254L166 255L168 253L171 254L172 252L174 252L173 254L174 254L173 255L175 256L174 256L174 258L173 258L172 258L170 258L169 259L167 258L164 260L166 263L163 264L164 265L166 265L167 266L168 269L166 271L165 270L165 269L164 269L164 271L164 273L166 276L165 277L163 278L162 277L161 277L161 276L161 274L159 275L159 276L158 277L157 275L156 276L154 275L152 276L152 273L151 276L151 278L148 280L148 281L144 283L143 282L143 283L143 285L142 284L141 284L140 283L138 282L139 279L141 280L142 279L143 281L145 279L145 278L144 277L144 276L145 275L143 272L145 271L146 272L147 271L147 269L145 268L145 265L144 265L141 266L141 266L138 266L134 266L133 265L135 263L134 262L136 264L138 263L138 262L135 262L135 262L135 261L136 262L136 259L133 259L132 262L131 263L129 263L127 261L127 264L130 264L130 265L129 267L128 267L126 264L126 266L126 267L124 270L127 271L125 274L128 275L128 276L130 279L128 283L129 287L123 291L121 293L121 294L124 295L124 296L125 296L124 296L121 298L118 298L117 299L116 296L115 297L114 296L114 295L112 294L111 292L109 293L108 291L107 291L106 292L106 291L104 291L105 288L103 287L102 288L102 286L99 284L99 283L101 281L100 277L97 280L96 279L97 278L94 276L95 274L97 273L96 273L94 272L94 270L93 271L92 272L92 273L91 273L90 273L88 273L87 271L84 270L83 272L83 272L82 270L79 268L81 268L77 268L75 266L73 267L72 266L71 268L70 267L68 267L67 267L65 266L63 267L62 267L61 268L58 267L54 261L54 257L49 252L49 246L44 247L42 246L39 241L39 238L40 235L40 229L38 228L33 228L28 225L28 224L28 220L29 216L38 209L40 204L44 200L46 199L48 200L50 202L51 205L53 206L61 203L68 202L72 201L73 197L78 192L80 187L81 185L92 179L98 169L100 161L107 159L111 156L109 160Z","Sikkim":"M383 198L386 200L387 201L387 202L387 207L385 209L386 211L388 213L388 214L386 215L385 217L384 216L381 216L379 218L377 217L373 217L372 216L371 216L372 213L372 210L375 204L375 203L373 203L373 201L378 200L380 199L381 199L382 197L383 198Z","Tamil Nadu":"M210 574L212 577L208 575L208 574L210 574L210 574ZM217 522L219 523L218 523L217 524L219 524L218 529L219 531L219 533L219 533L220 533L220 540L219 540L218 540L218 541L217 541L220 543L220 554L219 555L217 553L216 553L215 554L218 555L214 554L215 553L214 553L214 554L211 554L210 555L208 557L209 559L204 566L202 570L205 574L207 574L201 575L196 577L193 578L191 580L189 579L190 580L189 582L189 585L189 585L188 586L188 590L187 593L182 595L181 597L178 597L177 598L173 598L169 594L170 594L170 592L171 591L171 590L172 589L170 585L171 584L172 583L170 580L172 577L172 574L175 570L174 569L174 568L172 569L170 568L172 564L171 562L172 561L171 558L172 557L172 556L172 555L171 553L170 553L167 556L164 554L163 547L165 547L165 544L164 543L161 541L162 539L163 539L162 539L162 537L161 537L162 536L161 535L160 536L157 536L157 535L159 534L158 533L156 531L153 531L153 529L155 528L158 526L159 528L164 528L164 527L165 524L166 525L167 524L169 526L169 525L172 524L175 525L176 521L179 521L181 518L180 516L176 516L176 515L178 513L179 510L178 510L178 510L178 509L178 507L181 507L182 504L182 503L182 503L184 502L184 503L185 503L185 504L186 503L188 504L190 505L189 506L191 506L192 508L194 508L195 506L195 505L196 506L198 501L197 500L198 499L199 500L199 499L202 498L202 499L203 499L202 499L203 498L204 498L207 500L208 497L210 498L211 496L212 496L212 494L211 494L212 493L214 494L215 495L217 494L217 496L218 496L219 495L218 494L221 493L222 490L223 490L223 490L223 489L224 489L224 490L227 491L228 489L228 491L228 492L229 492L229 491L229 494L227 505L226 511L220 519L220 521L219 520L218 522L218 520L218 520L217 520L217 519L216 520L217 520L217 521L218 522L217 522L217 522Z","Telangana":"M192 362L195 364L197 364L201 365L201 367L204 367L203 369L206 369L207 371L208 371L209 368L213 370L214 369L215 370L216 368L219 368L222 372L221 375L222 377L220 378L220 379L221 379L221 384L225 386L228 386L229 388L232 387L234 390L236 392L237 395L236 396L236 396L237 397L238 395L239 396L239 397L241 397L240 398L242 404L244 403L246 404L250 404L253 404L254 402L255 402L256 403L252 405L251 408L250 411L249 412L248 413L247 412L246 413L245 413L244 415L242 416L239 416L240 417L239 417L238 419L235 419L235 418L233 417L232 418L231 420L230 419L229 420L232 421L232 421L234 421L233 423L234 424L233 425L231 424L230 423L230 424L228 420L226 419L223 422L223 423L224 424L222 427L221 427L220 426L219 425L212 428L209 429L208 430L208 435L205 435L203 436L202 438L201 437L201 438L200 439L197 438L196 439L193 438L190 439L190 441L188 443L186 442L186 443L183 442L179 442L176 441L176 439L176 435L178 434L178 433L173 432L171 431L174 430L175 430L174 429L176 428L176 427L175 427L176 426L176 426L175 426L175 424L176 424L175 422L176 420L176 418L174 417L174 416L175 414L175 413L177 412L176 411L180 410L178 409L177 408L176 409L175 408L175 406L177 405L176 404L179 401L177 399L178 398L177 396L178 394L177 393L177 392L177 391L178 391L177 391L178 390L178 389L181 389L180 387L181 386L182 386L182 384L184 384L181 379L182 378L183 378L183 376L184 375L183 374L185 373L186 375L189 375L189 372L191 371L191 369L191 368L191 367L192 365L192 363L191 363L191 362L192 362Z","Tripura":"M449 270L450 272L449 275L451 275L451 277L451 282L450 284L450 286L449 287L448 285L446 287L444 285L445 290L442 292L441 294L442 298L438 301L437 300L436 296L435 295L434 294L434 296L434 299L433 298L432 294L432 293L430 288L429 287L430 287L430 286L429 286L429 285L431 285L431 282L432 281L432 280L434 280L434 278L438 278L439 275L439 277L441 277L440 275L442 275L443 277L444 273L445 273L445 272L445 272L447 272L448 272L448 270L449 270Z","Uttar Pradesh":"M211 257L212 259L211 259L211 257ZM178 152L184 155L183 158L182 158L180 163L182 166L185 166L185 168L185 168L185 168L185 169L192 164L193 165L195 165L195 168L197 169L203 171L202 172L201 172L200 174L200 173L199 174L201 175L202 177L204 177L205 178L205 177L207 178L207 180L208 180L210 181L211 181L212 183L214 182L214 183L217 183L219 182L219 183L219 184L220 183L220 184L220 184L221 184L221 185L222 186L224 183L225 183L232 189L232 187L233 186L237 190L239 190L239 191L245 193L247 196L247 197L249 197L250 198L258 203L259 201L261 202L268 206L273 205L273 210L282 211L284 213L286 212L285 210L289 211L294 213L294 213L294 214L295 214L295 215L297 216L296 218L297 218L297 219L298 219L298 222L299 222L300 223L301 223L301 225L302 225L303 226L304 227L305 228L302 228L298 227L298 229L295 230L295 231L297 231L298 232L300 233L300 235L297 235L297 236L300 240L307 242L307 243L308 244L309 245L307 245L307 246L307 246L306 246L303 245L302 247L301 247L300 245L299 246L298 247L295 249L293 251L294 251L292 252L291 252L285 256L285 258L284 259L285 263L285 264L287 265L288 267L288 268L288 269L286 270L286 272L287 273L285 274L286 275L285 277L282 282L277 282L274 280L274 278L272 278L272 277L273 277L274 274L274 273L273 272L273 270L273 269L275 269L274 267L273 267L272 266L270 267L268 266L267 266L267 268L265 268L265 267L264 267L264 265L264 265L263 265L263 264L262 264L260 263L259 263L258 262L258 260L256 260L253 258L252 259L253 257L252 256L250 257L251 258L250 259L249 258L249 257L247 257L247 258L247 257L246 257L246 259L245 260L245 261L244 261L244 262L243 261L238 261L239 257L239 256L238 256L238 258L238 257L236 257L237 259L235 259L235 258L234 258L234 258L234 257L234 259L231 258L233 260L231 260L231 259L232 259L231 258L229 259L230 260L228 260L228 259L229 259L229 257L231 257L230 255L228 254L228 252L227 252L225 253L223 253L223 255L220 255L220 258L218 257L215 257L215 257L213 258L213 257L212 258L211 257L213 255L212 255L211 254L211 255L211 253L210 253L209 255L210 255L211 256L209 255L210 257L209 258L208 257L209 258L208 257L207 258L206 256L205 257L205 256L204 255L204 255L204 256L203 256L202 257L202 255L204 254L203 253L202 253L201 256L200 254L202 252L203 252L202 253L203 253L204 253L203 251L202 251L203 249L201 250L201 251L201 251L201 251L199 250L200 251L201 251L199 252L200 253L198 252L199 252L198 251L196 252L196 253L195 253L195 254L193 254L196 255L197 258L197 259L197 261L200 264L199 268L202 267L203 270L203 270L202 271L204 271L203 273L202 276L200 276L200 275L198 275L195 272L193 275L192 274L192 272L190 269L190 269L191 267L189 263L192 260L192 258L194 258L191 253L192 251L193 251L194 249L198 249L201 248L201 247L199 245L201 244L201 244L202 244L201 243L204 238L203 237L204 237L204 236L205 236L204 235L205 235L205 235L206 234L207 233L206 233L206 231L205 231L205 230L204 229L204 226L203 227L203 226L202 226L199 224L196 225L193 224L192 223L191 223L190 224L189 223L189 222L190 222L190 221L188 221L187 222L186 222L186 223L186 222L184 222L184 222L181 221L178 223L176 223L176 225L175 225L175 223L181 220L180 220L180 219L179 220L177 219L178 219L177 219L176 218L180 216L178 214L178 213L178 214L175 212L175 211L173 210L174 208L173 208L173 206L172 204L177 201L176 198L177 196L176 196L177 196L177 195L176 195L176 194L176 193L176 193L176 192L173 189L173 188L173 186L171 184L171 180L169 178L170 173L169 173L170 172L169 168L171 162L172 159L175 158L175 157L178 154L178 152Z","Uttarakhand":"M208 133L210 137L211 138L212 139L214 139L215 141L218 140L220 141L221 142L225 145L226 144L227 145L226 147L227 149L233 151L234 150L238 154L242 155L242 156L240 156L239 156L239 157L236 160L234 161L232 164L231 164L229 165L230 168L228 171L227 171L228 174L228 176L227 176L228 177L225 178L225 180L224 182L223 185L223 186L221 185L221 184L220 184L220 184L220 183L219 184L219 183L219 182L217 183L214 183L214 182L212 183L211 181L210 181L208 180L207 180L207 178L205 177L205 178L204 177L202 177L201 175L199 174L200 173L200 174L201 172L202 172L203 171L197 169L195 168L194 165L192 164L185 169L185 168L185 168L185 168L185 166L182 166L180 163L182 158L183 158L184 155L178 152L182 149L181 148L182 148L182 147L180 145L181 142L182 143L182 142L181 142L181 141L182 141L182 139L184 137L186 137L192 134L194 136L197 135L198 136L200 136L202 138L203 138L204 138L203 135L203 134L204 133L205 131L207 131L208 133Z","West Bengal":"M386 328L388 329L387 329L386 328ZM381 327L382 328L381 329L381 328L380 328L381 327ZM385 327L386 328L385 328L384 327L385 327ZM389 326L390 328L389 327L389 326L389 326ZM386 326L386 327L384 326L386 326ZM377 326L378 327L377 328L377 326ZM379 326L379 328L379 326L379 326ZM384 326L385 327L384 327L384 326ZM375 326L375 328L374 326L375 326ZM391 326L391 327L390 328L390 326L391 326ZM389 325L390 326L390 327L389 325ZM381 325L382 326L381 326L382 326L381 327L380 326L381 325ZM387 325L388 326L388 327L387 326L387 325ZM379 325L379 327L378 328L378 326L378 325L378 325L379 325ZM375 325L376 325L377 326L376 329L375 328L375 325ZM388 325L389 325L389 326L388 326L388 325ZM378 325L378 326L378 326L378 325ZM386 325L387 325L387 328L386 327L386 326L385 326L386 325ZM389 324L389 326L389 325L389 324ZM379 324L379 326L379 325L379 324ZM384 324L385 326L385 326L385 327L384 325L384 324ZM381 324L381 325L381 326L381 324L380 325L381 324ZM379 324L379 326L378 324L379 324ZM385 325L385 325L385 325L385 323L385 325ZM388 323L388 325L387 324L388 323ZM388 323L389 324L388 325L388 323ZM377 323L378 324L377 326L377 324L376 324L377 323ZM387 323L388 325L386 324L387 323ZM373 322L374 325L374 327L373 327L372 326L373 322ZM386 322L386 323L386 324L385 323L386 322ZM389 322L390 323L389 324L388 324L389 324L388 323L389 322ZM382 322L383 323L383 324L382 323L382 322ZM379 322L380 323L379 324L378 323L379 322ZM384 322L385 323L385 324L384 323L384 322ZM386 322L388 321L389 323L388 322L388 323L388 322L388 323L387 324L386 322ZM384 321L386 322L386 322L385 323L384 321ZM385 320L386 321L384 322L385 320ZM383 320L384 320L383 321L383 321L383 320ZM373 319L372 322L372 320L373 319ZM386 320L388 320L388 321L385 321L385 320L386 321L385 320L386 320ZM390 319L391 320L391 321L389 321L390 320L389 320L389 319L390 319ZM387 318L387 319L386 319L386 319L387 318ZM386 318L386 319L385 319L385 318L386 318ZM387 317L388 318L386 317L387 317ZM388 316L389 317L388 320L388 320L388 319L389 319L390 322L389 321L388 321L388 320L388 319L388 317L387 317L388 316ZM389 316L390 317L390 318L390 319L390 318L389 319L389 316L389 316ZM384 316L386 317L384 318L384 320L383 320L383 318L384 316ZM387 316L387 317L384 319L385 317L386 317L386 316L387 316ZM389 312L390 314L389 314L391 317L391 317L391 317L388 315L389 312ZM388 309L388 313L387 310L388 309ZM388 309L389 309L389 311L389 313L388 312L388 314L387 312L388 312L387 311L388 309ZM386 236L385 237L385 235L386 236ZM373 217L374 218L377 217L379 218L381 217L381 216L382 216L387 218L387 221L388 220L389 222L390 221L392 224L397 223L398 224L401 224L401 226L404 225L404 226L405 226L406 231L405 232L405 232L404 233L404 234L403 234L403 235L403 235L403 235L402 236L403 236L402 236L403 237L403 237L402 236L401 235L402 237L400 237L401 238L401 238L402 239L401 239L400 240L400 241L399 240L398 240L397 239L396 240L392 237L391 232L389 232L389 231L388 232L389 234L390 234L390 235L388 234L387 235L386 234L383 235L384 234L383 234L384 234L385 233L384 233L384 232L382 231L381 231L379 229L379 227L378 228L377 231L378 230L380 231L381 233L379 233L378 234L377 236L374 237L374 239L373 242L373 244L374 245L376 244L377 245L379 247L379 248L381 250L384 251L386 250L387 253L390 255L389 255L388 257L387 256L386 257L379 256L379 259L378 261L377 261L377 263L376 262L375 261L374 261L374 263L371 267L373 270L377 272L379 272L381 274L384 274L385 275L385 277L384 278L385 279L384 280L385 280L385 280L385 282L382 283L382 284L381 284L381 287L382 287L382 288L383 288L385 290L386 290L385 294L384 294L384 295L386 296L386 295L389 296L387 298L387 300L387 300L388 302L389 303L388 305L389 308L387 310L387 311L385 309L385 310L384 310L383 308L383 309L387 311L387 313L386 313L388 314L389 315L388 316L387 314L388 317L386 316L387 315L386 316L387 316L386 316L386 314L386 317L385 316L386 315L384 316L383 316L384 314L383 313L383 314L383 316L383 316L382 318L381 316L383 319L382 320L382 319L382 322L382 322L381 321L381 322L381 323L380 322L381 321L380 321L381 320L381 319L381 320L380 321L381 322L380 322L379 320L379 322L378 322L378 321L378 322L378 324L377 324L377 322L377 323L376 323L376 322L377 323L376 324L376 325L376 324L376 325L374 322L374 321L375 318L375 317L372 316L373 314L372 316L371 315L370 312L369 311L370 313L370 315L371 316L373 316L374 318L372 320L370 318L372 320L370 323L365 327L361 328L361 325L357 324L357 321L356 320L355 321L354 322L354 323L353 323L352 322L353 319L349 318L349 317L347 317L347 316L349 316L349 315L350 315L350 314L349 313L350 312L348 311L348 310L349 310L348 308L346 308L345 306L344 306L343 306L342 304L342 302L342 301L344 301L344 300L338 300L335 297L332 297L331 296L331 295L332 293L331 291L333 291L335 290L334 289L335 288L337 289L337 290L338 291L338 292L339 292L341 290L341 289L342 287L349 286L349 285L349 283L350 283L350 284L350 282L355 284L356 284L355 283L357 283L357 282L357 283L358 282L357 279L361 280L360 280L362 279L362 278L363 278L364 277L363 277L365 277L364 275L366 274L367 272L367 272L368 270L367 270L367 269L367 268L368 269L369 268L369 268L369 267L369 266L368 265L370 262L367 258L367 256L368 256L368 254L367 253L367 252L370 249L371 250L372 250L371 248L372 246L369 245L369 243L368 243L367 242L368 239L370 238L370 237L372 236L376 233L375 232L376 232L374 230L375 229L374 230L373 229L374 226L374 223L373 220L371 218L371 216L372 216L373 217Z","Odisha":"M335 309L336 310L339 311L342 314L343 313L347 316L347 317L349 317L349 318L352 318L353 319L352 322L353 323L354 323L354 322L355 321L356 320L357 321L357 324L361 325L361 325L361 328L360 329L359 328L360 329L356 329L354 331L350 336L350 338L352 344L352 344L350 344L349 345L352 345L352 346L351 346L353 346L347 350L347 352L348 352L348 353L344 356L341 361L328 365L323 367L314 375L311 378L309 377L309 377L308 377L309 378L308 380L307 379L306 380L305 380L305 382L304 382L304 383L303 382L303 384L298 385L297 384L295 384L293 380L292 380L293 382L292 381L290 377L288 380L287 380L288 379L287 378L287 381L286 380L284 380L284 381L285 381L285 381L285 382L286 383L283 385L282 385L282 386L279 388L279 389L280 389L279 391L279 391L279 392L277 393L276 392L275 391L274 393L272 394L271 395L271 394L271 392L270 392L270 391L269 389L266 392L267 392L266 393L267 394L265 396L267 397L266 397L266 399L265 399L265 400L260 399L254 403L254 402L253 404L248 404L249 402L249 402L250 400L251 395L253 393L255 393L257 390L259 389L258 387L259 387L259 386L261 386L261 385L263 384L263 382L264 382L264 378L263 377L263 373L262 373L263 372L262 371L261 370L260 370L261 364L259 364L259 363L257 362L257 359L259 358L260 360L261 359L263 360L264 360L266 363L268 362L271 363L271 364L273 363L273 360L271 360L267 359L267 357L268 354L267 353L268 351L266 349L267 347L266 342L268 343L269 342L271 339L272 337L277 336L281 338L282 337L282 335L283 335L283 332L286 333L284 330L285 328L286 327L287 328L287 327L286 326L287 325L287 324L289 323L289 322L288 321L288 319L289 319L289 318L290 316L292 315L294 313L297 313L298 311L296 310L297 309L299 311L300 312L302 313L305 313L307 312L311 312L312 311L313 312L317 310L317 314L317 314L315 318L317 318L320 320L322 317L326 318L327 318L328 319L330 318L331 318L330 318L329 320L332 321L334 316L333 315L335 314L334 313L334 312L333 310L335 309L335 309Z"};
+  var MAPNAMES = ["Rajasthan","Gujarat","Kerala","Haryana","Punjab","Tamil Nadu","Uttar Pradesh","Karnataka","Telangana","Andhra Pradesh","Odisha","Jharkhand","Bihar","West Bengal","Madhya Pradesh","Himachal Pradesh","Jammu and Kashmir","Maharashtra","Chhattisgarh","Uttarakhand","Assam","Goa"];
+  function drawMap(ci){
+    var on = {};
+    INDIA[ci].s.forEach(function(x){
+      var lab = x[0];
+      MAPNAMES.forEach(function(n){ if (lab.indexOf(n) >= 0) on[n] = 1; });
+      if (lab.indexOf("Konkan") >= 0) on["Maharashtra"] = 1;
+      if (lab.indexOf("Kashmir") >= 0) on["Jammu and Kashmir"] = 1;
+    });
+    var h = "";
+    Object.keys(MAPP).forEach(function(n){
+      var hi = on[n] ? " hi" : "";
+      var t = n + (n === "Jammu and Kashmir" ? " (incl. Ladakh)" : "");
+      h += '<path class="st' + hi + '" d="' + MAPP[n] + '"><title>' + t + '</title></path>';
+    });
+    $("r-map").innerHTML = h;
+  }
+  var regionTableBuilt = false;
+  function drawRegions(ci){
+    var d = INDIA[ci];
+    $("r-name").textContent = CLASSES[ci].n;
+    var tg = $("r-tag"); tg.textContent = d.tag; tg.className = "pill " + (d.tag==="Widespread" ? "good" : "warn");
+    $("r-note").textContent = d.note;
+    drawMap(ci);
+    $("r-list").innerHTML = d.s.map(function(x){ return '<li><b>'+x[0]+'</b> <span>('+x[1]+')</span></li>'; }).join("");
+    if (!regionTableBuilt){
+      $("r-table").innerHTML = '<tr><th>Class</th><th>States (major crops)</th></tr>' + CLASSES.map(function(c,i){
+        return '<tr><td>'+c.n+'</td><td>'+INDIA[i].s.map(function(x){return x[0]+' ('+x[1]+')'}).join('; ')+'</td></tr>';
+      }).join("");
+      regionTableBuilt = true;
+    }
+  }
+
+  /* ---------- render ---------- */
+  function update(){
+    var S = readState();
+    var ci = classify(S.sand,S.silt,S.clay);
+    var soil = soilFor(S, S.cond);
+
+    // whole tractor first, since it sets the dynamic wheel load
+    if (S.mode==="draft"){
+      var sol = solveSlipForDraft(S, soil, S.dpTarget);
+      S.slip = sol.s; S.draftNote = sol; $("slip").value = clamp(Math.round(sol.s*2)/2,0,30);
+    } else S.draftNote = null;
+    var T = tractorSolve(S, soil, S.slip);
+    S.slipR = S.slip;
+    var rearSel = (S.wheel==="rear") || S.drive==="2wd";
+    S.tyreObj = rearSel ? S.rear : S.front;
+    S.infl = rearSel ? S.inflR : S.inflF;
+    S.slip = rearSel ? S.slipR : T.sFpct;
+    var Wwheel = rearSel ? T.Wr/2 : T.Wf/2;
+    if (S.autoload){ S.load = Math.max(0.2, Wwheel); $("load").value = clamp(S.load,2,40); }
+    $("load").disabled = S.autoload;
+
+    var G = tyreGeom(S);
+    var cur = traction(soil,S,G,S.slip);
+    var opt = optimum(soil,S,G);
+    var sink = sinkage(soil,S,G,S.slip);
+    var s400 = stressAt(soil,S,G,0.4);
+    var vAct = T.va;
+    var DP = cur.NTR*S.load;
+    var Pdb = Math.max(0, DP*vAct);
+    var att = attOf(S), ai = attInfo(att, S.moist);
+
+    $("o-sand").textContent = S.sand+" %";
+    $("o-silt").textContent = S.silt+" %";
+    $("o-clay").textContent = S.clay+" %";
+    $("usda-name").textContent = CLASSES[ci].n;
+    $("c1name").textContent = CLASSES[ci].n.toLowerCase();
+    $("quick").value = String(ci);
+    $("o-moist").textContent = fmt(S.moist,1)+" %";
+    $("o-load").textContent  = fmt(S.load,1)+" kN";
+    $("o-slip").textContent  = fmt(S.slipR,1)+" %";
+    $("o-dp").textContent = fmt(S.dpTarget,1)+" kN";
+    $("slip").disabled = S.mode==="draft"; $("dpwrap").hidden = S.mode!=="draft";
+    $("o-speed").textContent = fmt(S.speed,1)+" km/h";
+    $("o-mass").textContent = fmt(S.mass,0)+" kg";
+    $("o-fr").textContent = fmt(S.fr,0)+" %";
+    $("o-wb").textContent = fmt(S.wb,2)+" m";
+    $("o-hd").textContent = fmt(S.hd,2)+" m";
+    $("o-inflR").textContent = fmt(S.inflR,0)+" kPa";
+    $("o-inflF").textContent = fmt(S.inflF,0)+" kPa";
+    $("o-lead").textContent = fmt(S.lead,1)+" %";
+    $("statics").textContent = "Static axle loads: rear "+fmt(T.Wr0,1)+" kN ("+fmt(T.Wr0/9.81*1000,0)+" kg), front "+fmt(T.Wf0,1)+" kN ("+fmt(T.Wf0/9.81*1000,0)+" kg). Rear tyre "+S.rear.label+(S.drive==="4wd"?", same on the front axle":", front tyre "+S.front.label)+".";
+    var dw = S.moist - soil.wref;
+    $("moist-note").textContent = (soil.CImeas!=null ? "Strength now comes from your measured cone index, not moisture. " : "") + "Reference (near field capacity) for this texture: "+fmt(soil.wref,1)+" %. Currently "+(Math.abs(dw)<1.5?"near it":(dw>0?fmt(dw,1)+" points wetter":fmt(-dw,1)+" points drier"))+".";
+
+    $("sw-title").textContent = (rearSel?"Rear":"Front")+" wheel, "+S.tyreObj.label+", "+fmt(S.load,2)+" kN"+(S.autoload?" dynamic load":" (manual load)");
+    $("wt-title").textContent = DRIVES_NAME[S.drive]+", "+fmt(S.mass,0)+" kg";
+
+    var risk = s400<50 ? ["good","Low"] : (s400<100 ? ["warn","Moderate"] : ["crit","High"]);
+    var K = [
+      ["Tractive efficiency", fmt(cur.TE*100,1), "%", "Optimum "+fmt(opt.te*100,1)+"% at "+fmt(opt.s,1)+"% slip"],
+      ["Net traction ratio", fmt(cur.NTR,3), "", "Pull per unit wheel load"],
+      ["Drawbar pull", fmt(Math.max(DP,0),2), "kN", "This wheel only"],
+      ["Drawbar power", fmt(Pdb,2), "kW", "This wheel, "+fmt(vAct*3.6,2)+" km/h actual"],
+      ["Mobility number, B<sub>n</sub>", fmt(cur.Bn,1), "", "Cone index "+fmt(cur.CI,0)+" kPa"],
+      ["Rut depth", fmt(sink*1000,0), "mm", "Including slip sinkage"],
+      ["Mean contact pressure", fmt(G.pc,0), "kPa", "Contact area "+fmt(G.A,3)+" m²"],
+      ["Stress at 0.4 m", fmt(s400,0)+'<span style="margin:0">&nbsp;kPa</span>', '<b class="pill '+risk[0]+'">'+risk[1]+'</b>', "Compaction risk"]
+    ];
+    var kHtml = function(K){ return K.map(function(k){
+      var unit = k[2] ? (k[2].indexOf("<b")===0 ? k[2] : '<span>'+k[2]+'</span>') : '';
+      return '<div class="kpi"><div class="l">'+k[0]+'</div><div class="v">'+k[1]+unit+'</div><div class="h">'+k[3]+'</div></div>';
+    }).join(""); };
+    $("kpis").innerHTML = kHtml(K);
+
+    var adv = [];
+    var diff = S.slip - opt.s;
+    if (diff < -2.5) adv.push(["warn","Slip is "+fmt(-diff,1)+" points below the optimum. Efficiency is limited by motion resistance. Pull a heavier implement or reduce ballast to move toward "+fmt(opt.s,1)+"%."]);
+    else if (diff > 3) adv.push(["warn","Slip is "+fmt(diff,1)+" points above the optimum. Power is being lost to wheel slip. Add ballast, lower the draft or reduce inflation pressure to widen the contact patch."]);
+    else adv.push(["good","Operating within about 3 points of the optimum slip for this soil and tyre set-up."]);
+    if (S.moist - soil.wref > 6 && S.clay >= 25) adv.push(["warn","This "+CLASSES[ci].n.toLowerCase()+" is "+fmt(S.moist-soil.wref,0)+" points wetter than its reference moisture. Cone index drops sharply in fine-textured soil at this level, so expect higher sinkage and lower pull."]);
+    if (sink > 0.08) adv.push(["warn","Rut depth is "+fmt(sink*1000,0)+" mm. Sinkage this deep raises motion resistance and signals a soil too weak for this load."]);
+    if (risk[0] !== "good") adv.push([risk[0], "Vertical stress at 0.4 m is "+fmt(s400,0)+" kPa. Reduce wheel load or inflation pressure, or use a wider tyre, to limit subsoil compaction."]);
+    if (ai.key==="plastic" || ai.key==="liquid") adv.push([ai.tone, "Moisture is "+fmt(S.moist,1)+" %, "+(ai.key==="liquid"?"above the liquid limit of ":"above the plastic limit of ")+fmt(ai.key==="liquid"?att.LL:att.PL,1)+" %. "+(ai.key==="liquid"?"Trafficability is lost, so do not run the tractor on this soil.":"Wheel passes will smear and compact this soil, so wait for it to drain below the plastic limit.")]);
+    else if (ai.key==="solid") adv.push(["warn","Moisture is below the shrinkage limit of "+fmt(att.SL,1)+" %. Tillage draft will be high and the soil will break into clods."]);
+    $("advice").innerHTML = adv.map(function(a){return '<p class="'+a[0]+'">'+a[1]+'</p>'}).join("");
+
+    // whole tractor block
+    var wc = wtCurve(S, soil);
+    var K2 = [
+      ["Drawbar pull", fmt(Math.max(T.DP,0),2), "kN", "About "+fmt(Math.max(T.DP,0)*101.97,0)+" kgf"],
+      ["Drawbar power", fmt(T.Pdb,2), "kW", "At "+fmt(T.va*3.6,2)+" km/h actual"],
+      ["Tractive efficiency", fmt(T.eff*100,1), "%", "Peak "+fmt(wc.best.e*100,1)+"% at "+fmt(wc.best.s,1)+"% slip"],
+      ["Pull–weight ratio", fmt(T.ratio,3), "", "Of "+fmt(S.mass,0)+" kg tractor"],
+      ["Rear axle load", fmt(T.Wr,1), "kN", fmt(T.Wr/T.Wt*100,0)+"% of weight, static "+fmt(T.Wr0,1)+" kN"],
+      ["Front axle load", fmt(T.Wf,1), "kN", fmt(T.Wf/T.Wt*100,0)+"% of weight, static "+fmt(T.Wf0,1)+" kN"],
+      ["Weight transfer", fmt(T.dW,2), "kN", "Moved to rear by the pull"],
+      ["Slip, rear / front", fmt(S.slipR,1)+" / "+(T.frontDriven?fmt(T.sFpct,1):"–"), "%", T.frontDriven?"Front wheels driven":"Front wheels free-rolling"]
+    ];
+    $("kpis2").innerHTML = kHtml(K2);
+    var adv2 = [];
+    if (T.DP <= 0) adv2.push(["warn","No net drawbar pull at this slip. Motion resistance exceeds the traction developed, so raise the slip or reduce front-axle resistance."]);
+    if (T.Wf/T.Wt < 0.2) adv2.push(["crit","The front axle carries only "+fmt(T.Wf/T.Wt*100,0)+"% of the weight. Steering and stability suffer below about 20%, so add front ballast, move weight forward or lower the hitch."]);
+    if (!T.frontDriven && T.frontMR>0){
+      var share = T.frontMR/Math.max(0.01,T.Wr*T.rr.r.NTR)*100;
+      adv2.push([share>15?"warn":"good","Free-rolling front wheels use "+fmt(T.frontMR,2)+" kN of motion resistance, about "+fmt(share,0)+"% of the rear-axle net pull."]);
+    }
+    if (T.frontDriven){
+      var fshare = T.frontPull/Math.max(0.01,T.DP)*100;
+      adv2.push(["good","The front axle supplies about "+fmt(fshare,0)+"% of the drawbar pull, at "+fmt(T.sFpct,1)+"% slip against "+fmt(S.slipR,1)+"% at the rear."]);
+    }
+    var gap = S.slipR - wc.best.s;
+    if (gap > 3) adv2.push(["warn","Rear slip is "+fmt(gap,1)+" points above the slip that gives the best whole-tractor efficiency ("+fmt(wc.best.s,1)+"%)."]);
+    else if (gap < -3) adv2.push(["warn","Rear slip is "+fmt(-gap,1)+" points below the slip that gives the best whole-tractor efficiency ("+fmt(wc.best.s,1)+"%). A heavier implement would use the tractor better."]);
+    else adv2.push(["good","Rear slip is close to the slip for best whole-tractor efficiency."]);
+    $("advice2").innerHTML = adv2.map(function(a){return '<p class="'+a[0]+'">'+a[1]+'</p>'}).join("");
+
+    drawTri(S,ci);
+    drawRegions(ci);
+    drawScene(S,soil,att,ai,T);
+    drawAtt(S,att,ai,soil);
+    drawCI(S);
+    drawC1(S,G,soil,opt,cur);
+    drawC2(S,G,soil,cur);
+    drawC3(S,G,soil,s400);
+    drawC4(S,G,soil,sink);
+    drawC5(S,wc,T);
+    drawTable(S,G,soil);
+    advUpdate(S,soil,T,G,cur,opt,wc);
+  }
+  function solveSlipForDraft(S, soil, dp){
+    var best = {s:0, dp:-1e9};
+    for (var s=0.25; s<=45; s+=0.25){ var d = tractorSolve(S,soil,s).DP; if (d>best.dp) best = {s:s, dp:d}; }
+    if (best.dp < dp) return {s:best.s, ok:false, maxDP:best.dp};
+    var lo = 0, hi = best.s;
+    for (var i=0;i<40;i++){ var m=(lo+hi)/2; if (tractorSolve(S,soil,m).DP < dp) lo=m; else hi=m; }
+    return {s:(lo+hi)/2, ok:true, maxDP:best.dp};
+  }
+  var DRIVES_NAME = {"2wd":"2WD tractor","mfwd":"MFWD tractor","4wd":"4WD tractor"};
+
+  function drawC1(S,G,soil,opt,cur){
+    var o = {W:640,H:340,ml:52,mr:20,mt:16,mb:44,x0:0,x1:30,y0:0,y1:100,
+      xt:[0,5,10,15,20,25,30],yt:[0,20,40,60,80,100],xl:"Wheel slip (%)",yl:"Tractive efficiency (%)"};
+    var f = frame(o), g = axes(o,f);
+    var curves = {};
+    Object.keys(CONDS).forEach(function(k){
+      var sk = soilFor(S,k);
+      curves[k] = SL.map(function(s){return [f.xs(s), f.ys(traction(sk,S,G,s).TE*100)]});
+    });
+    var shade = [[f.xs(0), f.ys(0)]];
+    SL.forEach(function(s,i){ if (s<=opt.s) shade.push(curves[S.cond][i]); });
+    shade.push([f.xs(opt.s), f.ys(traction(soil,S,G,opt.s).TE*100)]);
+    shade.push([f.xs(opt.s), f.ys(0)]);
+    g += '<path d="'+path(shade)+' Z" fill="var(--accent)" fill-opacity="0.16"/>';
+    Object.keys(CONDS).forEach(function(k){
+      var sel = k===S.cond;
+      g += '<path d="'+path(curves[k])+'" fill="none" stroke="'+CONDS[k].color+'" stroke-width="'+(sel?3.2:1.8)+'" stroke-opacity="'+(sel?1:0.65)+'" stroke-linejoin="round"/>';
+    });
+    Object.keys(CONDS).forEach(function(k){
+      var op = optimum(soilFor(S,k),S,G);
+      var cx = f.xs(op.s), cy = f.ys(op.te*100);
+      g += '<circle cx="'+cx+'" cy="'+cy+'" r="10" fill="var(--red)"/>';
+      g += '<text x="'+cx+'" y="'+(cy+3.5)+'" text-anchor="middle" style="fill:#fff;font-size:10px;font-weight:500">'+fmt(op.s,0)+'</text>';
+    });
+    var px = f.xs(S.slip), py = f.ys(cur.TE*100);
+    g += '<line x1="'+px+'" x2="'+px+'" y1="'+o.mt+'" y2="'+(o.H-o.mb)+'" stroke="var(--fg)" stroke-dasharray="4 4" stroke-opacity="0.6"/>';
+    g += '<circle cx="'+px+'" cy="'+py+'" r="6" fill="var(--surface)" stroke="var(--fg)" stroke-width="2.5"/>';
+    var right = px > 460;
+    g += '<text x="'+(right?px-10:px+10)+'" y="'+(py>60?py-12:py+22)+'" text-anchor="'+(right?'end':'start')+'" style="fill:var(--fg);font-size:12px">TE '+fmt(cur.TE*100,1)+'% at s = '+fmt(S.slip,1)+'%</text>';
+    g += '<rect x="'+o.ml+'" y="'+o.mt+'" width="'+(o.W-o.ml-o.mr)+'" height="'+(o.H-o.mt-o.mb)+'" fill="transparent"/>';
+    $("c1").innerHTML = g;
+    $("c1")._f = {ml:o.ml, mr:o.mr, W:o.W, x0:o.x0, x1:o.x1};
+  }
+
+  function drawC2(S,G,soil,cur){
+    var o = {W:640,H:300,ml:52,mr:20,mt:16,mb:44,x0:0,x1:30,y0:-0.1,y1:1,
+      xt:[0,5,10,15,20,25,30],yt:[0,0.2,0.4,0.6,0.8,1],fy:function(t){return t.toFixed(1)},xl:"Wheel slip (%)",yl:"Traction ratio (–)"};
+    var f = frame(o), g = axes(o,f);
+    var gtr=[],mrr=[],ntr=[];
+    SL.forEach(function(s){
+      var r = traction(soil,S,G,s);
+      gtr.push([f.xs(s),f.ys(r.GTR)]); mrr.push([f.xs(s),f.ys(r.MRR)]); ntr.push([f.xs(s),f.ys(r.NTR)]);
+    });
+    g += '<line x1="'+o.ml+'" x2="'+(o.W-o.mr)+'" y1="'+f.ys(0)+'" y2="'+f.ys(0)+'" stroke="var(--muted)" stroke-dasharray="2 3"/>';
+    g += '<path d="'+path(gtr)+'" fill="none" stroke="var(--gtr)" stroke-width="2.4"/>';
+    g += '<path d="'+path(mrr)+'" fill="none" stroke="var(--mrr)" stroke-width="2.4"/>';
+    g += '<path d="'+path(ntr)+'" fill="none" stroke="var(--ntr)" stroke-width="2.8"/>';
+    var px = f.xs(S.slip);
+    g += '<line x1="'+px+'" x2="'+px+'" y1="'+o.mt+'" y2="'+(o.H-o.mb)+'" stroke="var(--fg)" stroke-dasharray="4 4" stroke-opacity="0.6"/>';
+    [[cur.GTR,"var(--gtr)"],[cur.MRR,"var(--mrr)"],[cur.NTR,"var(--ntr)"]].forEach(function(p){
+      g += '<circle cx="'+px+'" cy="'+f.ys(p[0])+'" r="5" fill="var(--surface)" stroke="'+p[1]+'" stroke-width="2.5"/>';
+    });
+    var right = px > 440;
+    g += '<text x="'+(right?px-10:px+10)+'" y="'+(o.mt+14)+'" text-anchor="'+(right?'end':'start')+'" style="fill:var(--fg);font-size:12px">GTR '+fmt(cur.GTR,2)+' · MRR '+fmt(cur.MRR,2)+' · NTR '+fmt(cur.NTR,2)+'</text>';
+    g += '<rect x="'+o.ml+'" y="'+o.mt+'" width="'+(o.W-o.ml-o.mr)+'" height="'+(o.H-o.mt-o.mb)+'" fill="transparent"/>';
+    $("c2").innerHTML = g;
+    $("c2")._f = {ml:o.ml, mr:o.mr, W:o.W, x0:o.x0, x1:o.x1};
+  }
+
+  function drawC3(S,G,soil,s400){
+    var xmax = Math.max(60, Math.ceil(G.pc*1.15/20)*20);
+    var o = {W:320,H:320,ml:46,mr:22,mt:14,mb:44,x0:0,x1:xmax,y0:0,y1:0.8,
+      xt:[0,xmax/4,xmax/2,xmax*3/4,xmax].map(function(v){return Math.round(v)}),yt:[0,0.2,0.4,0.6,0.8],
+      fy:function(t){return t.toFixed(1)},xl:"Vertical stress (kPa)",yl:"Depth (m)"};
+    var f = frame(o);
+    var ys = function(z){return o.mt + (z/0.8)*(o.H-o.mt-o.mb)};
+    f.ys = ys;
+    var g = axes(o,f);
+    [50,100].forEach(function(t,i){
+      if (t<=xmax){
+        g += '<line x1="'+f.xs(t)+'" x2="'+f.xs(t)+'" y1="'+o.mt+'" y2="'+(o.H-o.mb)+'" stroke="'+(i?'var(--crit)':'var(--warn)')+'" stroke-dasharray="4 3"/>';
+        g += '<text x="'+(f.xs(t)+4)+'" y="'+(o.mt+11)+'" style="fill:'+(i?'var(--crit)':'var(--warn)')+'">'+t+'</text>';
+      }
+    });
+    var pts=[]; for (var z=0.005; z<=0.8; z+=0.01) pts.push([f.xs(stressAt(soil,S,G,z)), ys(z)]);
+    pts.unshift([f.xs(G.pc), ys(0)]);
+    g += '<path d="'+path(pts)+' L'+f.xs(0)+' '+ys(0.8)+' L'+f.xs(0)+' '+ys(0)+' Z" fill="var(--accent)" fill-opacity="0.12"/>';
+    g += '<path d="'+path(pts)+'" fill="none" stroke="var(--accent)" stroke-width="2.6"/>';
+    g += '<circle cx="'+f.xs(s400)+'" cy="'+ys(0.4)+'" r="5" fill="var(--surface)" stroke="var(--fg)" stroke-width="2.4"/>';
+    var lx = f.xs(s400)+10, anchor="start";
+    if (lx > 230){ lx = f.xs(s400)-10; anchor="end"; }
+    g += '<text x="'+lx+'" y="'+(ys(0.4)+4)+'" text-anchor="'+anchor+'" style="fill:var(--fg)">'+fmt(s400,0)+' kPa</text>';
+    $("c3").innerHTML = g;
+    $("c3note").textContent = "Dashed lines mark 50 and 100 kPa. Surface stress equals the mean contact pressure of "+fmt(G.pc,0)+" kPa.";
+  }
+
+  function drawC4(S,G,soil,sink){
+    var W=320, top=46, depthPx=78;
+    var zmm = sink*1000, shown = Math.min(zmm,150), dpx = shown/150*depthPx;
+    var g = '';
+    g += '<rect x="0" y="'+top+'" width="'+W+'" height="'+(150-top)+'" fill="'+soil.color+'" fill-opacity="0.22"/>';
+    for (var i=0;i<=3;i++){
+      var yy = top + i*depthPx/3;
+      g += '<line x1="0" x2="'+W+'" y1="'+yy+'" y2="'+yy+'" stroke="var(--grid)"/>';
+      g += '<text x="'+(W-6)+'" y="'+(yy-3)+'" text-anchor="end">'+(i*50)+' mm</text>';
+    }
+    g += '<line x1="0" x2="'+W+'" y1="'+top+'" y2="'+top+'" stroke="var(--muted)" stroke-width="1.5"/>';
+    g += '<rect x="'+(W/2-52)+'" y="'+(top-30+dpx)+'" width="104" height="30" rx="4" fill="var(--fg)" fill-opacity="0.85"/>';
+    g += '<text x="'+(W/2)+'" y="'+(top-11+dpx)+'" text-anchor="middle" style="fill:var(--surface);font-size:11px">tyre, b = '+fmt(G.b*1000,0)+' mm</text>';
+    g += '<line x1="'+(W/2+66)+'" x2="'+(W/2+66)+'" y1="'+top+'" y2="'+(top+dpx)+'" stroke="var(--red)" stroke-width="2"/>';
+    g += '<text x="'+(W/2+74)+'" y="'+(top+Math.max(dpx,10)/2+4)+'" style="fill:var(--red);font-size:12px">'+fmt(zmm,0)+' mm</text>';
+    $("c4").innerHTML = g;
+    $("c4note").textContent = "Depth window is 150 mm"+(zmm>150?"; this rut is deeper than the window.":".");
+  }
+
+  function drawC5(S,wc,T){
+    var o = {W:640,H:300,ml:52,mr:20,mt:16,mb:44,x0:0,x1:30,y0:-0.1,y1:1,
+      xt:[0,5,10,15,20,25,30],yt:[0,0.2,0.4,0.6,0.8,1],fy:function(t){return t.toFixed(1)},xl:"Rear wheel slip (%)",yl:"Ratio (–)"};
+    var f = frame(o), g = axes(o,f);
+    var a = wc.pts.map(function(p){return [f.xs(p.s), f.ys(clamp(p.ratio,-0.1,1))]});
+    var b = wc.pts.map(function(p){return [f.xs(p.s), f.ys(clamp(p.eff,-0.1,1))]});
+    g += '<line x1="'+o.ml+'" x2="'+(o.W-o.mr)+'" y1="'+f.ys(0)+'" y2="'+f.ys(0)+'" stroke="var(--muted)" stroke-dasharray="2 3"/>';
+    g += '<path d="'+path(a)+'" fill="none" stroke="var(--gtr)" stroke-width="2.8"/>';
+    g += '<path d="'+path(b)+'" fill="none" stroke="var(--ntr)" stroke-width="2.8"/>';
+    var bx = f.xs(wc.best.s), by = f.ys(wc.best.e);
+    g += '<circle cx="'+bx+'" cy="'+by+'" r="9" fill="var(--red)"/>';
+    g += '<text x="'+bx+'" y="'+(by+3.5)+'" text-anchor="middle" style="fill:#fff;font-size:10px;font-weight:500">'+fmt(wc.best.s,0)+'</text>';
+    var px = f.xs(S.slipR);
+    g += '<line x1="'+px+'" x2="'+px+'" y1="'+o.mt+'" y2="'+(o.H-o.mb)+'" stroke="var(--fg)" stroke-dasharray="4 4" stroke-opacity="0.6"/>';
+    g += '<circle cx="'+px+'" cy="'+f.ys(clamp(T.ratio,-0.1,1))+'" r="5" fill="var(--surface)" stroke="var(--gtr)" stroke-width="2.5"/>';
+    g += '<circle cx="'+px+'" cy="'+f.ys(clamp(T.eff,-0.1,1))+'" r="5" fill="var(--surface)" stroke="var(--ntr)" stroke-width="2.5"/>';
+    var right = px > 440;
+    g += '<text x="'+(right?px-10:px+10)+'" y="'+(o.mt+14)+'" text-anchor="'+(right?'end':'start')+'" style="fill:var(--fg);font-size:12px">DP/W '+fmt(T.ratio,2)+' · efficiency '+fmt(T.eff*100,0)+'% · DP '+fmt(Math.max(T.DP,0),2)+' kN</text>';
+    g += '<rect x="'+o.ml+'" y="'+o.mt+'" width="'+(o.W-o.ml-o.mr)+'" height="'+(o.H-o.mt-o.mb)+'" fill="transparent"/>';
+    $("c5").innerHTML = g;
+    $("c5")._f = {ml:o.ml, mr:o.mr, W:o.W, x0:o.x0, x1:o.x1};
+  }
+
+  function drawTable(S,G,soil){
+    var rows = '<tr><th>Surface</th><th>CI (kPa)</th><th>s<sub>opt</sub> (%)</th><th>TE<sub>max</sub> (%)</th></tr>';
+    Object.keys(CONDS).forEach(function(k){
+      var s = soilFor(S,k), op = optimum(s,S,G), sel = k===S.cond;
+      rows += '<tr'+(sel?' style="font-weight:600"':'')+'><td><span class="dot" style="display:inline-block;background:'+s.color+';margin-right:6px"></span>'+s.name+'</td><td>'+fmt(ciOf(s,S.moist),0)+'</td><td>'+fmt(op.s,1)+'</td><td>'+fmt(op.te*100,1)+'</td></tr>';
+    });
+    rows += '<tr><td colspan="4" style="text-align:left;color:var(--muted);white-space:normal">Single wheel, optimum slip and TE for the wheel above. Derived from texture: n = '+fmt(soil.n,2)+', k<sub>c</sub> = '+fmt(soil.kc,1)+' kN/m<sup>n+1</sup>, k<sub>φ</sub> = '+fmt(soil.kphi,0)+' kN/m<sup>n+2</sup></td></tr>';
+    $("ptable").innerHTML = rows;
+  }
+
+  /* ---------- interaction ---------- */
+  var quick = $("quick");
+  quick.innerHTML = CLASSES.map(function(c,i){return '<option value="'+i+'">'+c.n+'</option>'}).join("");
+  quick.addEventListener("change", function(){
+    var t = CLASSES[+quick.value].t;
+    $("sand").value = t[0]; $("silt").value = t[1]; $("clay").value = t[2];
+    update();
+  });
+  $("rearTyre").innerHTML = REAR_GROUPS.map(function(g){
+    return '<optgroup label="'+g.g+'">'+g.t.map(optHtml).join("")+'</optgroup>';
+  }).join("");
+  $("rearTyre").value = "14.9-28";
+  applyDrive("2wd");
+
+  function setComp(changed, v){
+    var keys = ["sand","silt","clay"], others = keys.filter(function(k){return k!==changed});
+    var a = +$(others[0]).value, b = +$(others[1]).value, rest = 100 - v;
+    if (a+b===0){ a = rest/2; b = rest/2; } else { var na = a/(a+b)*rest; b = rest - Math.round(na); a = Math.round(na); }
+    $(changed).value = v; $(others[0]).value = a; $(others[1]).value = b;
+  }
+  ["sand","silt","clay"].forEach(function(k){
+    $(k).addEventListener("input", function(){ setComp(k, +$(k).value); update(); });
+  });
+  ["moist","load","slip","speed","mass","fr","wb","hd","lead","inflR","inflF","rearTyre","frontTyre"].forEach(function(k){
+    $(k).addEventListener("input", update);
+    $(k).addEventListener("change", update);
+  });
+  $("autoload").addEventListener("change", update);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="cond"]'), function(r){ r.addEventListener("change", update); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="wheel"]'), function(r){ r.addEventListener("change", update); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="drive"]'), function(r){
+    r.addEventListener("change", function(){ applyDrive(r.value); update(); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("#scen .chip"), function(b){
+    b.addEventListener("click", function(){ writeState(scenarioState(b.getAttribute("data-s"))); });
+  });
+  $("reset").addEventListener("click", function(){ writeState(DEFAULTS); });
+
+  // cone index profile inputs
+  $("ci-grid").innerHTML = CI_DEPTHS.map(function(d,i){
+    return '<label for="ci'+i+'">'+d+' cm<input type="number" id="ci'+i+'" min="0" step="50" inputmode="numeric" placeholder="kPa"></label>';
+  }).join("");
+  function ciBlank(){ return CI_IDS.every(function(id){return $(id).value===""}); }
+  function fillCIFromModel(){
+    var S = readState();
+    var sm = soilFor(Object.assign({}, S, {useCI:false}), S.cond), e = ciOf(sm, S.moist);
+    CI_DEPTHS.forEach(function(d,i){ $("ci"+i).value = Math.round(modelProfileAt(e,S.cond,d)/10)*10; });
+  }
+  CI_IDS.forEach(function(id){ $(id).addEventListener("input", update); });
+  $("useci").addEventListener("change", function(){
+    $("ci-inputs").hidden = !$("useci").checked;
+    if ($("useci").checked && ciBlank()) fillCIFromModel();
+    update();
+  });
+  $("ci-fill").addEventListener("click", function(){ fillCIFromModel(); update(); });
+  $("ci-clear").addEventListener("click", function(){ CI_IDS.forEach(function(id){ $(id).value=""; }); update(); });
+
+  // drag on triangle
+  (function(){
+    var svg = $("tri"), dragging = false;
+    function setFromEvent(e){
+      var r = svg.getBoundingClientRect();
+      var x = (e.clientX - r.left)/r.width*TRI.W, y = (e.clientY - r.top)/r.height*TRI.H;
+      var H = TRI.BL[1]-TRI.TOP[1];
+      var cl = clamp((TRI.BL[1]-y)/H*100, 0, 100);
+      var xl = TRI.BL[0] + (TRI.TOP[0]-TRI.BL[0])*cl/100;
+      var xr = TRI.BR[0] + (TRI.TOP[0]-TRI.BR[0])*cl/100;
+      var frac = xr>xl ? clamp((x-xl)/(xr-xl),0,1) : 0;
+      var clay = Math.round(cl), silt = Math.round((100-cl)*frac);
+      silt = Math.min(silt, 100-clay);
+      $("clay").value = clay; $("silt").value = silt; $("sand").value = 100-clay-silt;
+      update();
+    }
+    svg.addEventListener("pointerdown", function(e){ dragging = true; try{svg.setPointerCapture(e.pointerId)}catch(_){} setFromEvent(e); });
+    svg.addEventListener("pointermove", function(e){ if (dragging) setFromEvent(e); });
+    svg.addEventListener("pointerup", function(){ dragging = false; });
+    svg.addEventListener("pointercancel", function(){ dragging = false; });
+  })();
+
+  // drag on slip charts (sets rear wheel slip)
+  ["c1","c2","c5"].forEach(function(id){
+    var svg = $(id), dragging = false;
+    function setFromEvent(e){
+      var r = svg.getBoundingClientRect(), f = svg._f;
+      var vx = (e.clientX - r.left)/r.width*f.W;
+      var s = f.x0 + (vx - f.ml)/(f.W - f.ml - f.mr)*(f.x1 - f.x0);
+      $("slip").value = clamp(Math.round(s*2)/2, 0, 30);
+      update();
+    }
+    svg.classList.add("drag");
+    svg.addEventListener("pointerdown", function(e){ dragging = true; try{svg.setPointerCapture(e.pointerId)}catch(_){} setFromEvent(e); });
+    svg.addEventListener("pointermove", function(e){ if (dragging) setFromEvent(e); });
+    svg.addEventListener("pointerup", function(){ dragging = false; });
+    svg.addEventListener("pointercancel", function(){ dragging = false; });
+  });
+
+/*@@ADVJS@@*/
+  var cb = $("copycite");
+  if (cb) cb.addEventListener("click", function(){
+    var el = $("citetext");
+    function fallback(){
+      try{ var r=document.createRange(); r.selectNodeContents(el); var s=window.getSelection(); s.removeAllRanges(); s.addRange(r); }catch(_){}
+      cb.textContent = "Select and copy";
+    }
+    try{
+      navigator.clipboard.writeText(el.textContent).then(function(){ cb.textContent = "Copied"; }, fallback);
+    }catch(_){ fallback(); }
+  });
+
+  update();
+})();
+</script>
+</body>
+</html>

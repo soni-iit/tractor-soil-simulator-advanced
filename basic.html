@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tractor–Soil Simulator v2 (calibrated, compact)</title>
+<style>
+:root{--bg:#f6f7f4;--panel:#fff;--ink:#1d2a22;--mut:#5d6b62;--line:#d9dfd8;--acc:#2f6f4f;--acc2:#b4571f;--blue:#2a5f9e;--warn:#9a5b00;--warnbg:#fff4de;--bad:#a12b2b;--badbg:#fde9e7;--ok:#1f6b3a;--okbg:#e5f4ea}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121815;--panel:#1b2420;--ink:#e4ece6;--mut:#9fb0a5;--line:#2f3c35;--acc:#6cc497;--acc2:#e69a62;--blue:#78a9e6;--warn:#f1c068;--warnbg:#3a2f14;--bad:#ef8b83;--badbg:#3b1d1b;--ok:#7fd49b;--okbg:#17321f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{padding:14px 16px 8px;max-width:1500px;margin:auto}h1{font-size:20px;margin:0 0 2px}h2{font-size:15px;margin:0 0 8px}h3{font-size:13px;margin:10px 0 4px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.sub{color:var(--mut);font-size:12.5px}.wrap{display:grid;grid-template-columns:340px 1fr;gap:14px;max-width:1500px;margin:auto;padding:8px 16px 40px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+aside .panel{position:relative}label{display:block;font-size:12px;color:var(--mut);margin:7px 0 2px}
+input,select,button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+input[type=number]{width:100%}input[type=range]{width:100%;padding:0}select{width:100%}
+button{cursor:pointer;background:var(--acc);color:#fff;border-color:var(--acc);padding:5px 10px}button.sec{background:transparent;color:var(--acc)}button:hover{filter:brightness(1.08)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.val{float:right;color:var(--ink);font-variant-numeric:tabular-nums}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px}.kpi b{display:block;font-size:22px;font-variant-numeric:tabular-nums}.kpi span{font-size:11.5px;color:var(--mut)}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11.5px;font-weight:600}.b-ok{background:var(--okbg);color:var(--ok)}.b-warn{background:var(--warnbg);color:var(--warn)}.b-bad{background:var(--badbg);color:var(--bad)}
+.note{font-size:12px;color:var(--mut)}.alert{border-radius:8px;padding:8px 10px;margin:8px 0;font-size:12.5px}.alert.warn{background:var(--warnbg);color:var(--warn)}.alert.bad{background:var(--badbg);color:var(--bad)}.alert.ok{background:var(--okbg);color:var(--ok)}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px}@media(max-width:520px){.charts{grid-template-columns:1fr}}
+canvas{width:100%;height:300px;display:block}
+table{border-collapse:collapse;width:100%;font-size:12.5px}th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:right;vertical-align:top}th:first-child,td:first-child{text-align:left}th{color:var(--mut);font-weight:600}
+td.l{text-align:left}details{margin:6px 0}summary{cursor:pointer;font-weight:600}code,pre{font:12px ui-monospace,Menlo,monospace}pre{background:var(--bg);padding:8px;border-radius:6px;overflow:auto}
+.legend{font-size:11.5px;color:var(--mut);margin-top:2px}.legend i{display:inline-block;width:16px;height:0;border-top:3px solid;vertical-align:middle;margin:0 4px 0 10px}
+footer{max-width:1500px;margin:auto;padding:0 16px 30px;color:var(--mut);font-size:12px}
+</style></head><body>
+<header>
+  <h1>Tractor–Soil Interaction Simulator <span class="badge b-ok">v2 · field-calibrated</span></h1>
+  <div class="sub">Brixius/ASABE D497.7 wheel-numeric model + whole-tractor load transfer + calibration to measured field cases, with Bekker–Wong cross-check, subsoil stress (SCSI) and compaction. Peeyush Soni, Dept. of Agricultural &amp; Food Engineering, IIT Kharagpur. Every number carries a source and verification status (see “Evidence”).</div>
+</header>
+<div class="wrap">
+<aside>
+  <div class="panel"><h2>1 · Tractor</h2>
+    <div class="row"><div><label>Mass, kg</label><input id="mass" type="number" value="4500" step="50"></div><div><label>Static rear share</label><input id="rearFrac" type="number" value="0.60" step="0.01" min="0.3" max="0.85"></div></div>
+    <div class="row"><div><label>Wheelbase, m</label><input id="wb" type="number" value="2.40" step="0.05"></div><div><label>Hitch height, m</label><input id="hd" type="number" value="0.55" step="0.05"></div></div>
+    <div class="row"><div><label>Drive</label><select id="drive"><option>2WD</option><option selected>MFWD</option><option>4WD</option></select></div><div><label>Front lead, %</label><input id="lead" type="number" value="3" step="0.5" min="-5" max="12"></div></div>
+    <h3>Rear tyres</h3>
+    <div class="row"><div><label>Size</label><select id="rearTyre"></select></div><div><label>Wheels on rear axle</label><select id="nRear"><option value="2">2 (single)</option><option value="4">4 (duals)</option></select></div></div>
+    <div class="row"><div><label>Inflation, kPa</label><input id="rearInfl" type="number" value="100" step="5"></div><div><label>Measured gross footprint, cm² (opt.)</label><input id="rearArea" type="number" placeholder="auto"></div></div>
+    <h3>Front tyres</h3>
+    <div class="row"><div><label>Size</label><select id="frontTyre"></select></div><div><label>Inflation, kPa</label><input id="frontInfl" type="number" value="140" step="5"></div></div>
+    <div class="row"><div><label>Measured footprint, cm² (opt.)</label><input id="frontArea" type="number" placeholder="auto"></div><div><label>Net pressure / inflation kp</label><input id="kp" type="number" value="1.3" step="0.05" min="1" max="1.9"></div></div>
+    <div class="row"><div><label>Lug-contact ratio (net/gross area)</label><input id="lug" type="number" value="0.6" step="0.05" min="0.4" max="1"></div><div></div></div>
+    <div class="note" style="margin-top:6px">Radial/bias is taken from the tyre-size list (radial → ASABE radial coefficients).</div>
+  </div>
+  <div class="panel"><h2>2 · Soil &amp; operation</h2>
+    <label>Soil state preset (ASABE D497.7 classes)</label><select id="ciPreset"></select>
+    <label>Cone index, 0–150 mm mean <span class="val" id="ciV"></span></label><input id="ci" type="range" min="200" max="2500" step="10" value="900">
+    <label>Drawbar pull required <span class="val" id="dpV"></span></label><input id="dp" type="range" min="0" max="40" step="0.1" value="10">
+    <label>Travel speed, km/h</label><input id="speed" type="number" value="7" step="0.5">
+    <h3>Subsoil / compaction</h3>
+    <div class="row"><div><label>Concentration ν</label><select id="nu"><option value="4">4 – hard/dry</option><option value="5" selected>5 – medium</option><option value="6">6 – soft/wet</option><option value="3">3 – Boussinesq</option></select></div><div><label>Subsoil strength @0.5 m, kPa</label><input id="strength" type="number" value="50" step="5"></div></div>
+    <label>Number of passes in same track</label><input id="passes" type="number" value="5" min="1" max="30">
+  </div>
+  <div class="panel"><h2>3 · Field calibration</h2>
+    <div class="row"><div><label>κ<sub>CI</sub> (effective CI multiplier)</label><input id="kCI" type="number" value="1" step="0.01" min="0.2" max="2"></div><div><label>κ<sub>ρ</sub> (rolling-resistance multiplier)</label><input id="kRho" type="number" value="1" step="0.01" min="0.2" max="2"></div></div>
+    <div style="margin:8px 0"><button class="sec" id="kText">Textbook (1, 1)</button> <button class="sec" id="kKim">Use Kim-2022 mean</button></div>
+    <h3>Calibrate to your own measurements</h3>
+    <div class="note">One row per field test of <b>this tractor</b>: cone index (kPa), drawbar pull (kN), rear slip (%), tractive efficiency (0–1, optional). Paste CSV, one row per line.</div>
+    <textarea id="csv" rows="4" style="width:100%;font:12px monospace;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px" placeholder="CI,DP,slip,TE
+700,8.1,9.5,0.70
+560,10.1,13.4,0.68"></textarea>
+    <div style="margin-top:6px"><button id="fit">Fit κ to my data</button> <button class="sec" id="loadKim">Load Kim TX58 setup + cases</button></div>
+    <div id="fitOut" class="note" style="margin-top:6px"></div>
+  </div>
+</aside>
+<main>
+  <div class="panel" style="padding:8px 14px"><span id="calBadge"></span> <span class="note" id="calNote"></span><div id="alerts"></div></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="charts">
+    <div class="panel"><h2>Tractive efficiency &amp; pull vs rear slip</h2><canvas id="c1"></canvas><div class="legend" id="l1"></div>
+      <label><input type="checkbox" id="showMas" style="width:auto"> overlay Masiero 2011 surface means (drawbar/engine power ÷ driveline η)</label> <input id="etaD" type="number" value="0.88" step="0.01" style="width:70px"></div>
+    <div class="panel"><h2>Subsoil stress under the rear wheel</h2><canvas id="c2"></canvas><div class="legend" id="l2"></div></div>
+    <div class="panel"><h2>Axle loads &amp; traction split</h2><canvas id="c3"></canvas><div class="legend" id="l3"></div></div>
+    <div class="panel"><h2>Surface density vs passes (indicative)</h2><canvas id="c4"></canvas><div class="legend" id="l4"></div></div>
+  </div>
+  <div class="panel"><h2>Reality check — Kim et al. (2022) plough trials vs this model</h2><div id="valTab"></div><div class="note" id="valNote"></div></div>
+  <div class="panel"><h2>Independent cross-check — Bekker–Wong rigid-wheel theory (rear wheel)</h2>
+    <div class="row3"><div><label>Terrain parameters</label><select id="bekSel"></select></div><div><label>Slip for thrust, %</label><input id="bekS" type="number" value="15"></div><div></div></div><div id="bekOut"></div></div>
+  <div class="panel"><h2>Case-specific empirical slip estimator — Al-Dosary et al. (2023), 2WD plough</h2>
+    <div class="row3"><div><label>Implement</label><select id="adImp"><option value="chisel">Chisel</option><option value="moldboard" selected>Moldboard</option><option value="disk">Disk</option></select></div>
+    <div><label>Depth, cm</label><input id="adPD" type="number" value="20"></div><div><label>Speed, km/h</label><input id="adPS" type="number" value="4"></div></div>
+    <div class="row3"><div><label>Moisture, %db</label><input id="adMC" type="number" value="12.5"></div><div><label>Soil texture index STI</label><input id="adSTI" type="number" value="0.45" step="0.01"></div><div></div></div><div id="adOut"></div></div>
+  <div class="panel"><h2>Evidence &amp; sources</h2><div id="evid"></div></div>
+  <div class="panel"><h2>Model equations</h2><div id="eqs"></div></div>
+</main></div>
+<footer>MIT licence. Predictions are engineering estimates; calibrate to your own tractor and soil before design use. Textbook coefficients are for bias-ply (Brixius) and radial (ASABE) tyres on tilled/firm agricultural soils. See docs/ for derivations and limitations.</footer>
+
+<script>
+/*  Tractor–Soil Interaction Simulator v2 — physics core
+ *  Works in the browser (window.TSM) and in Node (require).
+ *  Units: SI.  Forces kN, lengths m, pressure/CI kPa, mass kg.
+ *  Every equation here is documented in docs/MODEL.md with its source.
+ */
+(function (root) {
+  'use strict';
+  var G = 9.81;
+  var clamp = function (x, a, b) { return Math.max(a, Math.min(b, x)); };
+  var TSM = {};
+
+  /* ---------- 1. Tyre geometry (nominal size → b, d, section height) ---------- */
+  // Nominal agricultural tyre: section width w [in], rim diameter [in]. Overall d = rim + 2·AR·w.
+  TSM.tyreFromNominal = function (wIn, rimIn, ar) {
+    ar = ar || 0.85;
+    var b = wIn * 0.0254, d = (rimIn + 2 * ar * wIn) * 0.0254;
+    return { b: b, d: d, h: (d - rimIn * 0.0254) / 2 };
+  };
+
+
+  // Metric/radial designation e.g. 480/70R34 : section width [mm], aspect ratio [%], rim [in]
+  TSM.tyreFromMetric = function (swMm, arPct, rimIn) {
+    var b = swMm / 1000, h = b * arPct / 100, d = rimIn * 0.0254 + 2 * h;
+    return { b: b, d: d, h: h };
+  };
+
+  /* ---------- 2. Contact patch & deflection ratio δ/h ----------
+   * Mean contact pressure p_c = kp · p_i   (kp ≈ 1.0–1.9 reported, default 1.3; data.js)
+   * A = W / p_c ;  L = A / (π/4·b) ;  δ from chord geometry  L = 2√(dδ − δ²)  ->  δ = d/2·(1 − √(1 − (L/d)²))
+   * If the user knows the measured footprint area, it overrides the estimate.               */
+  TSM.contact = function (t, Wkn, infl_kPa, opt) {
+    opt = opt || {};
+    var kp = opt.kp || 1.3, lug = opt.lug || 0.6;
+    var pc = kp * infl_kPa;                          // mean NET contact pressure (lug-contact area basis)
+    var Ag = opt.areaM2 || (Wkn / pc / lug);         // GROSS footprint (envelope incl. lug gaps)
+    var A = opt.areaM2 ? opt.areaM2 * lug : Wkn / pc; // net area used for stress
+    var L = clamp(Ag / (Math.PI / 4 * t.b), 0.05, 0.95 * t.d);
+    var delta = t.d / 2 * (1 - Math.sqrt(1 - Math.pow(L / t.d, 2)));
+    var dh = clamp(delta / t.h, 0.03, 0.45);
+    return { A: A, Ag: Ag, L: L, pc: Wkn / A, delta: delta, dh: dh };
+  };
+
+  /* ---------- 3. Brixius (1987) / ASABE D497.7 wheel-numeric traction ----------
+   * Bn = (CI·b·d / W) · (1+5δ/h)/(1+3b/d)
+   * Bias:   μg = 0.88(1−e^{−0.1Bn})(1−e^{−7.5s}) + 0.04 ;  ρ = 1/Bn + 0.04 + 0.5 s/√Bn
+   * Radial: μg = 0.88(1−e^{−0.1Bn})(1−e^{−9.5s}) + 0.0325 ; ρ = 0.9/Bn + 0.0325 + 0.5 s/√Bn
+   * kCI and kRho are field-calibration multipliers (1 = textbook).                      */
+  TSM.brixius = function (p) {
+    var CI = p.CI * (p.kCI || 1);
+    var Bn = (CI * p.b * p.d / p.W) * (1 + 5 * p.dh) / (1 + 3 * p.b / p.d);
+    var s = clamp(p.s, 0, 0.95), mu, rho;
+    if (p.radial) {
+      mu = 0.88 * (1 - Math.exp(-0.1 * Bn)) * (1 - Math.exp(-9.5 * s)) + 0.0325;
+      rho = 0.9 / Bn + 0.0325 + 0.5 * s / Math.sqrt(Bn);
+    } else {
+      mu = 0.88 * (1 - Math.exp(-0.1 * Bn)) * (1 - Math.exp(-7.5 * s)) + 0.04;
+      rho = 1 / Bn + 0.04 + 0.5 * s / Math.sqrt(Bn);
+    }
+    rho *= (p.kRho || 1);
+    return { Bn: Bn, mu: mu, rho: rho, gross: p.W * mu, roll: p.W * rho, net: p.W * (mu - rho),
+             te: (mu - rho) / mu * (1 - s) };
+  };
+
+  /* ---------- 4. Whole-tractor model ----------
+   * cfg: { mass, rearFrac, wheelbase, hitchH, drive:'2WD'|'MFWD'|'4WD', lead (front lead, 0.0–0.08),
+   *        rear:{b,d,h,infl,radial,areaM2?}, front:{...}, nRear:2|4(duals count wheels), kp }
+   * soil: { CI [kPa], kCI, kRho }
+   * Axle loads: static + dynamic transfer ΔW = DP·hd/WB (drawbar pull DP, hitch height hd).
+   * Front slip: sF = 1 − (1−sR)/(1+lead)  (negative lead clipped at 0 slip when lead<0).   */
+  TSM.axleLoads = function (cfg, DP) {
+    var W = cfg.mass * G / 1000;
+    var Wr0 = cfg.rearFrac * W, Wf0 = W - Wr0;
+    var dW = DP * cfg.hitchH / cfg.wheelbase;
+    var Wr = Wr0 + dW, Wf = Math.max(0.02 * W, Wf0 - dW);
+    return { W: W, Wr: Wr, Wf: Wf, dW: dW };
+  };
+
+  function axleResult(t, Wax, nW, s, soil, driven, kp, lug) {
+    var Wwheel = Wax / nW;
+    var c = TSM.contact(t, Wwheel, t.infl, { kp: kp, lug: lug, areaM2: t.areaM2 });
+    var r = TSM.brixius({ CI: soil.CI, b: t.b, d: t.d, W: Wwheel, s: driven ? s : 0, dh: c.dh,
+                          radial: t.radial, kCI: soil.kCI, kRho: soil.kRho });
+    return { contact: c, br: r, gross: driven ? Wax * r.mu : 0, roll: Wax * r.rho,
+             pull: driven ? Wax * (r.mu - r.rho) : -Wax * r.rho };
+  }
+
+  // Evaluate the tractor at rear-wheel slip sR for a given drawbar pull (load transfer depends on DP).
+  TSM.tractorAt = function (cfg, soil, DP, sR) {
+    var ax = TSM.axleLoads(cfg, DP);
+    var frontDriven = cfg.drive !== '2WD';
+    var sF = frontDriven ? Math.max(0, 1 - (1 - sR) / (1 + (cfg.lead || 0))) : 0;
+    var R = axleResult(cfg.rear, ax.Wr, cfg.nRear || 2, sR, soil, true, cfg.kp, cfg.lug);
+    var F = axleResult(cfg.front, ax.Wf, 2, sF, soil, frontDriven, cfg.kp, cfg.lug);
+    var pull = R.pull + F.pull;
+    var gross = R.gross + F.gross;
+    // Exact tractive efficiency with different axle slips: TE = DP / Σ(GTR_ax /(1−s_ax))
+    var inP = R.gross / (1 - sR) + (frontDriven ? F.gross / (1 - sF) : 0);
+    // rolling-resistance of free front wheels is already inside pull; add it back to "input" via net balance
+    var te = DP > 0 && inP > 0 ? DP / (inP) : 0;
+    return { ax: ax, sR: sR, sF: sF, R: R, F: F, pull: pull, gross: gross, te: clamp(te, 0, 1), frontDriven: frontDriven };
+  };
+
+  // Net pull available at slip sR when the *required* DP is itself used for load transfer: solve self-consistently.
+  TSM.pullCapacity = function (cfg, soil, sR) {
+    var DP = 0;
+    for (var k = 0; k < 40; k++) {
+      var r = TSM.tractorAt(cfg, soil, DP, sR);
+      var nd = Math.max(0, r.pull);
+      if (Math.abs(nd - DP) < 1e-6) { DP = nd; break; }
+      DP = DP + 0.6 * (nd - DP);
+    }
+    return TSM.tractorAt(cfg, soil, DP, sR);
+  };
+
+  // Curve over slip (self-consistent pull)
+  TSM.curve = function (cfg, soil, n, smax) {
+    n = n || 80; smax = smax || 0.4; var out = [];
+    for (var i = 0; i <= n; i++) {
+      var s = smax * i / n, r = TSM.pullCapacity(cfg, soil, s);
+      out.push({ s: s, pull: r.pull, te: r.te, gross: r.gross, ratio: r.pull / r.ax.W, r: r });
+    }
+    return out;
+  };
+
+  // Inverse problem: given drawbar pull DP (kN) find slip & TE.  null if beyond capacity.
+  TSM.solveForDraft = function (cfg, soil, DP) {
+    var lo = 0.0005, hi = 0.6, f = function (s) { return TSM.tractorAt(cfg, soil, DP, s).pull - DP; };
+    // pull(s) rises then may fall: find the max by scan, then bisect on the rising branch
+    var smax = lo, fmax = -1e9;
+    for (var s = 0.002; s <= hi; s += 0.002) { var v = f(s); if (v > fmax) { fmax = v; smax = s; } }
+    if (fmax < 0) return { ok: false, maxPull: DP + fmax, sAtMax: smax };
+    var a = lo, b = smax;
+    if (f(a) >= 0) return { ok: true, res: TSM.tractorAt(cfg, soil, DP, a) };
+    for (var i = 0; i < 60; i++) { var m = (a + b) / 2; if (f(m) < 0) a = m; else b = m; }
+    return { ok: true, res: TSM.tractorAt(cfg, soil, DP, b) };
+  };
+
+  // Slip at maximum tractive efficiency (self-consistent curve)
+  TSM.optimum = function (cfg, soil) {
+    var c = TSM.curve(cfg, soil, 160, 0.4), best = c[0];
+    for (var i = 1; i < c.length; i++) if (c[i].te > best.te) best = c[i];
+    return best;
+  };
+
+  /* ---------- 5. Field calibration ----------
+   * Given measured cases [{CI, DP, slip(%), te, label}] for the same tractor, find (kCI, kRho)
+   * minimising  Σ [ (ln(s_pred/s_meas))² + ((te_pred−te_meas)/0.05)² ].
+   * Returns {kCI,kRho,rms_slip_pts,rms_te,rows}.  With one case the problem is under-determined:
+   * we fit kCI only to the slip and report kRho=1 unless useTE is requested. */
+  TSM.predictCase = function (cfg, c, kCI, kRho) {
+    var soil = { CI: c.CI, kCI: kCI, kRho: kRho };
+    var r = TSM.solveForDraft(cfg, soil, c.DP);
+    return r.ok ? { slip: r.res.sR * 100, te: r.res.te } : { slip: NaN, te: NaN };
+  };
+
+  // Exact two-parameter fit for ONE case: kCI matches the measured slip, kRho the measured tractive efficiency.
+  TSM.fitCase = function (cfg, c) {
+    var kRho = 1, kCI = 1, it, p;
+    function fitK(kr) { var b = [1e9, 1]; for (var k = 0.1; k <= 2.0001; k += 0.005) { var q = TSM.predictCase(cfg, c, k, kr); if (!isNaN(q.slip)) { var e = Math.abs(q.slip - c.slip); if (e < b[0]) b = [e, k]; } } return b[1]; }
+    for (it = 0; it < 6; it++) {
+      kCI = fitK(kRho);
+      if (!c.te) break;
+      var bb = [1e9, kRho];
+      for (var r = 0.1; r <= 2.0001; r += 0.01) { var q = TSM.predictCase(cfg, c, kCI, r); if (!isNaN(q.te)) { var e = Math.abs(q.te - c.te); if (e < bb[0]) bb = [e, r]; } }
+      if (Math.abs(bb[1] - kRho) < 0.005) { kRho = bb[1]; break; }
+      kRho = bb[1];
+    }
+    kCI = fitK(kRho); p = TSM.predictCase(cfg, c, kCI, kRho);
+    return { kCI: kCI, kRho: kRho, slip: p.slip, te: p.te };
+  };
+  TSM.calibrate = function (cfg, cases, opt) {
+    opt = opt || {};
+    var fitRho = opt.fitRho !== false && cases.length >= 3;
+    var best = { err: 1e18, kCI: 1, kRho: 1 };
+    var ks = [], kr = [];
+    for (var k = 0.3; k <= 1.6001; k += 0.02) ks.push(k);
+    if (fitRho) for (var j = 0.3; j <= 1.6001; j += 0.04) kr.push(j); else kr = [1];
+    ks.forEach(function (a) {
+      kr.forEach(function (b) {
+        var e = 0;
+        cases.forEach(function (c) {
+          var p = TSM.predictCase(cfg, c, a, b);
+          if (isNaN(p.slip)) { e += 50; return; }
+          e += Math.pow(Math.log(p.slip / c.slip), 2);
+          if (fitRho && c.te) e += Math.pow((p.te - c.te) / 0.05, 2);
+        });
+        if (e < best.err) best = { err: e, kCI: a, kRho: b };
+      });
+    });
+    var rows = cases.map(function (c) {
+      var p0 = TSM.predictCase(cfg, c, 1, 1), p1 = TSM.predictCase(cfg, c, best.kCI, best.kRho);
+      return { label: c.label, meas: { slip: c.slip, te: c.te }, textbook: p0, calibrated: p1 };
+    });
+    var rs = 0, rt = 0, n = 0;
+    rows.forEach(function (r) { if (!isNaN(r.calibrated.slip)) { rs += Math.pow(r.calibrated.slip - r.meas.slip, 2); rt += Math.pow(r.calibrated.te - (r.meas.te || r.calibrated.te), 2); n++; } });
+    return { kCI: best.kCI, kRho: best.kRho, rows: rows, rmsSlip: Math.sqrt(rs / Math.max(1, n)), rmsTE: Math.sqrt(rt / Math.max(1, n)), n: cases.length, fitRho: fitRho };
+  };
+
+  /* ---------- 6. Bekker–Wong rigid-wheel cross-check (independent theory) ----------
+   * p = (kc/b + kφ) z^n.  Rigid-wheel sinkage  z0 = [3W /((3−n)(kc/b+kφ)√d)]^{2/(2n+1)}
+   * Compaction resistance Rc = b (kc/b+kφ) z0^{n+1}/(n+1)   (Bekker 1960; Wong 2010)
+   * Thrust (Janosi–Hanamoto) H = (A c + W tanφ)[1 − (K/(sL))(1 − e^{−sL/K})],  A=bL, L=√(d·z0)·… (contact length ≈ √(d z0)·√... )
+   * Units: kc [kN/m^{n+1}], kφ [kN/m^{n+2}], c [kPa], K [m], W [kN].                           */
+  TSM.bekkerWheel = function (soil, b, d, Wkn, s) {
+    var n = soil.n, kk = soil.kc / b + soil.kphi;
+    var z0 = Math.pow(3 * Wkn / ((3 - n) * kk * Math.sqrt(d)), 2 / (2 * n + 1));
+    z0 = Math.min(z0, 0.45 * d);
+    var Rc = b * kk * Math.pow(z0, n + 1) / (n + 1);
+    var L = Math.sqrt(d * z0) * 1.0 + 0.0;                 // chord of the rigid-wheel arc ≈ 2√(d z0)/2 *2 ⇒ use half-chord ×2 below
+    L = 2 * Math.sqrt(d * z0 - z0 * z0);
+    var A = b * L, tphi = Math.tan(soil.phi * Math.PI / 180);
+    var sL = Math.max(s * L, 1e-9);
+    var H = (A * soil.c + Wkn * tphi) * (1 - (soil.K / sL) * (1 - Math.exp(-sL / soil.K)));
+    var Rr = Rc + 0.04 * 0;                                // bulldozing / tyre hysteresis neglected (rigid wheel)
+    return { z0: z0, Rc: Rc, H: H, DP: H - Rc, L: L, mu: H / Wkn, rho: Rc / Wkn };
+  };
+
+  /* ---------- 7. Stress under the tyre & subsoil compaction risk ----------
+   * Fröhlich/Söhne concentration-factor form for a uniformly loaded circle, on the axis:
+   *   σz = p·[1 − (z²/(a²+z²))^{ν/2}]      (ν=3 reproduces Boussinesq, Keller & Or 2022, Eq. 1)
+   * a = √(A/π) equivalent radius, p = W/A mean contact stress.                          */
+  TSM.stressAt = function (p_kPa, A_m2, z, nu) {
+    var a = Math.sqrt(A_m2 / Math.PI);
+    return p_kPa * (1 - Math.pow(z * z / (a * a + z * z), (nu || 4) / 2));
+  };
+  TSM.stressProfile = function (p_kPa, A_m2, nu, zmax) {
+    var out = [];
+    for (var z = 0; z <= (zmax || 1.0) + 1e-9; z += 0.025) out.push({ z: z, s: TSM.stressAt(p_kPa, A_m2, z, nu) });
+    return out;
+  };
+  // SCSI = σ(0.5 m) / strength(0.5 m)  >1 → risk of chronic subsoil compaction (Keller & Or 2022)
+  TSM.scsi = function (p_kPa, A_m2, nu, strength_kPa) {
+    var s = TSM.stressAt(p_kPa, A_m2, 0.5, nu);
+    return { stress: s, scsi: s / (strength_kPa || 50) };
+  };
+
+  /* ---------- 8. Compaction law (Raghavan-type) ----------
+   * Δγd = A · log10(N · p/p0) · fw   — maximum density change vs passes N and contact pressure p
+   * (McKyes 1985 §5, after Raghavan et al. 1977: γd = γ0 + A1 log(Np) + B1 log(w%), w < optimum).
+   * A, p0 are soil-specific.  The shipped presets are *indicative* (see data.js).            */
+  TSM.compaction = function (gamma0, N, p_kPa, A, p0, wRatio) {
+    var x = N * p_kPa / (p0 || 100);
+    var d = A * Math.log10(Math.max(x, 1));
+    return gamma0 + d * clamp(wRatio == null ? 1 : wRatio, 0.2, 1.2);
+  };
+
+  /* ---------- 9. Utilities ---------- */
+  TSM.G = G; TSM.clamp = clamp;
+  TSM.fitLog = function (xs, ys) {                // y = a + b·log10 x
+    var n = xs.length, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    xs.forEach(function (x, i) { var lx = Math.log10(x); sx += lx; sy += ys[i]; sxx += lx * lx; sxy += lx * ys[i]; });
+    var b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - b * sx) / n;
+    return { a: a, b: b };
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = TSM; else root.TSM = TSM;
+})(typeof window !== 'undefined' ? window : this);
+</script>
+<script>
+/*  Tractor–Soil Interaction Simulator v2 — evidence base
+ *  Each number carries a source id and a verification status:
+ *    'text'       : value read from the article body text / Project book page (open-access full text)
+ *    'recalled'   : standard textbook value reproduced from memory of the literature; NOT re-checked against a copy
+ *    'derived'    : computed here from 'text' values (formula shown)
+ *    'indicative' : fitted/assumed here; use only as a starting point
+ *  Anything not stated by the source is recorded as null — it is never guessed.
+ */
+(function (root) {
+  'use strict';
+  var D = {};
+
+  D.SOURCES = {
+    kim2022:   { cite: 'Kim Y.-S., Lee S.-D., Baek S.-M., Baek S.-Y., Jeon H.-H., Lee J.-H., Kim W.-S., Shim J.-Y., Kim Y.-J. (2022) Analysis of the effect of tillage depth on the working performance of tractor-moldboard plow system under various field environments. Sensors 22(7):2750.', doi: '10.3390/s22072750', pmid: '35408364', status: 'text (tables 1–7 partly truncated; axle loads and tyre inflation not reported)' },
+    masiero2011: { cite: 'Masiero F.C., Lanças K.P., Monteiro L.A. (2011) Determinação do rendimento na barra de tração de tratores agrícolas com tração dianteira auxiliar (4x2 TDA). Revista Energia na Agricultura 26(4):55–73.', doi: null, status: 'text (Tables 6–8 values as extracted; "drawbar efficiency" = drawbar power / engine power, not wheel tractive efficiency)' },
+    aldosary2023: { cite: 'Al-Dosary N.M.N., Alnajjar F.M., Aboukarima A.E.M. (2023) Estimation of wheel slip in 2WD mode for an agricultural tractor during plowing operation using an artificial neural network. Sci. Rep. 13(1):5975.', doi: '10.1038/s41598-023-32994-7', pmid: '37046038', status: 'text (MLR equations; STI formula garbled in source and not used)' },
+    valera2012: { cite: 'Valera D.L., Gil J., Agüera J. (2012) Design of a new sensor for determination of the effects of tractor field usage in southern Spain: soil sinkage and alterations in the cone index and dry bulk density. Sensors 12(10):13480–13490.', doi: '10.3390/s121013480', pmid: '23202006', status: 'text (units of density/CI not stated in table; density assumed kg/m³ - values 1136–1321 are plausible only in kg/m³)' },
+    kukharets2025: { cite: 'Kukharets S. et al. (2025) Tractor tyre contact stress and soil stress under CLAAS Xerion 5000 / Trelleborg IF 900/60R42. Sci. Rep. (article s41598-024-84102-y).', doi: '10.1038/s41598-024-84102-y', status: 'text (Eq. 7–11 coefficients; Tables 1–3 not reproduced)' },
+    keller2022: { cite: 'Keller T., Or D. (2022) Farm vehicles approaching weights of sauropods exceed safe mechanical limits for soil functioning. PNAS 119(21):e2117699119.', doi: '10.1073/pnas.2117699119', pmid: '35576469', status: 'text (stress model Eq.1–2, ~50 kPa subsoil limit, SCSI>1 criterion)' },
+    brixius1987: { cite: 'Brixius W.W. (1987) Traction prediction equations for bias ply tires. ASAE Paper 87-1622; adopted in ASABE D497.7 (2011) Agricultural machinery management data.', doi: null, status: 'recalled (equations reproduced; checked for internal consistency by unit tests)' },
+    mckyes1985: { cite: 'McKyes E. (1985) Soil Cutting and Tillage. Elsevier. Ch. 5 (Raghavan et al. 1977 density law); Ch. 6 (tyre rolling resistance).', doi: null, status: 'text (Project book; Eq. 5.1 form only — soil constants not in the extract)' },
+    wong2010:  { cite: 'Wong J.Y. (2010) Terramechanics and Off-Road Vehicle Engineering, 2nd ed., Elsevier. Bekker–Wong sinkage, compaction resistance and Janosi–Hanamoto thrust; Table of terrain parameters.', doi: null, status: 'recalled (terrain parameters are widely reproduced; verify against your copy)' },
+    thorpe2024: { cite: 'Thorpe D.F. et al. (2024) Impacts of bulk density and water content on the tire-soil contact area of agricultural field vehicles. Acta Sci. Agron. 46(1):e67906.', doi: '10.4025/actasciagron.v46i1.67906', status: 'text, but wheel-load column looks inconsistent with contact areas — NOT used numerically' },
+    asabe497: { cite: 'ASABE D497.7 (2011) Agricultural Machinery Management Data — traction chapter; cone-index classes 450/900/1200/1800 kPa.', doi: null, status: 'recalled' }
+  };
+
+  /* ---- Field cases for the TE–slip / pull–slip overlay & calibration ---- */
+  D.TRACTOR_KIM = { // TX58, 4WD, bias tyres  (Kim 2022)
+    name: 'TX58 4WD (Tong Yang Moolsan), 42 kW class', massText: 3894, massTable1: 4072, wheelbase: 2.155,
+    rear: { nominal: [14.9, 30], radial: false }, front: { nominal: [11.2, 20], radial: false },
+    unknown: ['static axle split', 'tyre inflation', 'hitch height', 'ballast'], source: 'kim2022'
+  };
+  D.KIM_CASES = [
+    { id: 'kim-sl', label: 'Sandy loam (Kim 2022)', soil: 'Sandy loam', CI: 698.7, CIsource: 'mean of SL1–SL3 (0–150 mm): 560.5, 725.3, 810.3', DP: 8.1, DPsd: 1.4, slip: 9.5, slipSd: 0.5, te: 0.70, teSd: 0.02, speed: 6.9, depth_cm: 17.5, w_pct: 17.7, PI: 6.89, source: 'kim2022', status: 'text' },
+    { id: 'kim-l',  label: 'Loam (Kim 2022)',       soil: 'Loam',       CI: 563.2, CIsource: 'mean of SL1–SL3: 471.2, 563.1, 655.3',  DP: 10.1, DPsd: 2.5, slip: 13.4, slipSd: 2.4, te: 0.68, teSd: 0.04, speed: 6.2, depth_cm: 16.3, w_pct: 31.6, PI: 13.49, source: 'kim2022', status: 'text' },
+    { id: 'kim-cl', label: 'Clay loam (Kim 2022)',  soil: 'Clay loam',  CI: 864.7, CIsource: 'mean of SL1–SL3: 680.8, 900.6, 1012.6', DP: 13.9, DPsd: 2.5, slip: 22.3, slipSd: 3.8, te: 0.61, teSd: 0.03, speed: 4.8, depth_cm: 15.2, w_pct: 24.3, PI: 13.95, source: 'kim2022', status: 'text' }
+  ];
+  // Kim: clay loam has the HIGHEST CI of the three yet the HIGHEST slip -> CI alone is not a sufficient mobility index in wet, plastic soils.
+
+  /* ---- Surface-class averages: 4×2 TDA (MFWD) tractors, Brazil, tested on concrete & soils (Masiero 2011, Table 7/8) ---- */
+  D.MASIERO_SURFACES = [
+    { surface: 'Concrete',        eff_pct: 63.2, slip_pct: 7.6,  asabe_eff: 72.2 },
+    { surface: 'Firm soil',       eff_pct: 56.5, slip_pct: 11.9, asabe_eff: 63.9 },
+    { surface: 'Vegetation cover',eff_pct: 49.7, slip_pct: 14.6, asabe_eff: null },
+    { surface: 'Tilled soil',     eff_pct: 44.0, slip_pct: 16.2, asabe_eff: 53.9 }
+  ];
+  D.MASIERO_NOTE = 'eff = drawbar power / engine power (includes driveline losses). To compare with wheel tractive efficiency divide by the driveline efficiency (assumed 0.85–0.90 here — an assumption, not from the paper).';
+
+  /* ---- Empirical, case-specific slip estimators (valid ONLY inside their domain) ---- */
+  D.ALDOSARY = {
+    tractor: 'Furat 70 hp, 2WD, drive-wheel inflation 120 kPa (tyre size/ballast not reported)',
+    domain: { depth_cm: [10, 25], speed_kmh: [3, 6], mc_pctdb: [8.5, 20.5], STI: [0.342, 0.573], soils: 'clay (STI 0.342) and clay loam (STI 0.573) field plots' },
+    eq: {
+      chisel:    { c: -6.594, pd: 0.163, mc: -0.109, ps: 2.537, sti: 1.924, R2: 0.967, rmse: 0.570, mean: [6.68, 7.18] },
+      moldboard: { c: -8.718, pd: 0.226, mc: -0.092, ps: 3.045, sti: 1.378, R2: 0.919, rmse: 1.514, mean: [8.15, 8.43] },
+      disk:      { c: -6.236, pd: 0.227, mc: -0.161, ps: 2.909, sti: 2.034, R2: 0.929, rmse: 0.944, mean: [9.24, 9.59] }
+    },
+    source: 'aldosary2023', status: 'text'
+  };
+
+  /* ---- Tyre contact models measured for specific tyres ---- */
+  D.KUKHARETS = {
+    tyre: 'Trelleborg IF 900/60R42 on CLAAS Xerion 5000, axle load 119.5 kN, sandy loam (Luvisol)',
+    domain: { P_MPa: [0.08, 0.24] },
+    area_m2: function (P) { return 0.608 - 3.274 * P + 7.617 * P * P; },   // Eq. 8
+    contact_stress_kPa: function (P) { return 41.8 + 1599.4 * P - 3447.2 * P * P; }, // Eq. 9
+    permissible: { normal_kPa: 150, shear_kPa: 45, note: 'soil-specific limits stated for that sandy loam' },
+    source: 'kukharets2025', status: 'text (R²=0.98 as reported)'
+  };
+  D.CONTACT_KP = { default: 1.3, range: [1.0, 1.9], note: 'Mean contact pressure / inflation pressure. Default 1.3 is an assumption inside the literature range; override with measured footprint area when you have it.', status: 'indicative' };
+
+  /* ---- Soil mechanics constants ---- */
+  D.CI_CLASSES = [ // ASABE D497.7 mobility classes (CI, kPa) 
+    { id: 'sand',  label: 'Sand / soft (450 kPa)',     CI: 450 },
+    { id: 'soft',  label: 'Soft soil (900 kPa)',       CI: 900 },
+    { id: 'tilled',label: 'Tilled soil (1200 kPa)',    CI: 1200 },
+    { id: 'firm',  label: 'Firm soil (1800 kPa)',      CI: 1800 }
+  ];
+  D.BEKKER = [ // kc kN/m^(n+1), kphi kN/m^(n+2), c kPa, phi deg, K m   (Wong 2010 compilation — 'recalled')
+    { id: 'drysand',   label: 'Dry sand (LETE)',          n: 1.10, kc: 0.99,  kphi: 1528.43, c: 1.04,  phi: 28, K: 0.025 },
+    { id: 'sandyloam', label: 'Sandy loam (Michigan)',    n: 0.70, kc: 5.27,  kphi: 1515.04, c: 1.72,  phi: 29, K: 0.025 },
+    { id: 'clayey',    label: 'Clayey soil (Thailand)',   n: 0.50, kc: 13.19, kphi: 692.15,  c: 4.14,  phi: 13, K: 0.025 },
+    { id: 'heavyclay', label: 'Heavy clay (wet)',         n: 0.13, kc: 12.70, kphi: 1555.95, c: 68.95, phi: 34, K: 0.006 }
+  ];
+
+  D.STRESS = {
+    nu: { hard: 4, medium: 5, soft: 6, range: [3, 6], note: 'Fröhlich concentration factor; ν=3 → Boussinesq. Keller & Or 2022 use 3–6 (6 for the upper estimate).' },
+    subsoilLimit_kPa: 50, scsiDepth_m: 0.5, source: 'keller2022'
+  };
+
+  /* ---- Compaction ---- */
+  D.VALERA_PASSES = { // surface dry bulk density vs passes (clay, Spain)  — kg/m3 assumed
+    N: [0, 1, 2, 3, 4, 5], gamma: [1135.93, 1245.32, 1285.31, 1287.18, 1307.01, 1320.83],
+    ci: [0.982757, 1.26304, 1.27257, 1.29861, 1.31047, 1.31076], ciUnit: 'not stated in paper table (probably MPa)', source: 'valera2012', status: 'text'
+  };
+  D.RAGHAVAN = { form: 'γd = γ0 + A1·log10(N·p) + B1·log10(w%)   (w below optimum; McKyes 1985 §5.2, Eq. 5.1)', note: 'Soil constants A1, B1 are soil-specific and are NOT provided by the shipped sources; the UI derives an indicative A1 from Valera 2012 (clay) and flags it.', source: 'mckyes1985' };
+
+  /* ---- Tyre database (nominal sizes; geometry derived, AR 0.85 for conventional, listed aspect for radial) ---- */
+  D.TYRES = {
+    rear: [
+      { id: '14.9-30', nom: [14.9, 30], radial: false }, { id: '16.9-30', nom: [16.9, 30], radial: false },
+      { id: '18.4-30', nom: [18.4, 30], radial: false }, { id: '18.4-34', nom: [18.4, 34], radial: false },
+      { id: '20.8-38', nom: [20.8, 38], radial: false }, { id: '23.1-30', nom: [23.1, 30], radial: false },
+      { id: '420/85R30', met: [420, 85, 30], radial: true }, { id: '480/70R34', met: [480, 70, 34], radial: true },
+      { id: '520/85R38', met: [520, 85, 38], radial: true }, { id: '650/65R42', met: [650, 65, 42], radial: true }
+    ],
+    front: [
+      { id: '7.50-16', nom: [7.5, 16], radial: false }, { id: '9.5-24', nom: [9.5, 24], radial: false },
+      { id: '11.2-20', nom: [11.2, 20], radial: false }, { id: '11.2-24', nom: [11.2, 24], radial: false },
+      { id: '13.6-24', nom: [13.6, 24], radial: false }, { id: '14.9-24', nom: [14.9, 24], radial: false },
+      { id: '340/85R24', met: [340, 85, 24], radial: true }, { id: '420/70R28', met: [420, 70, 28], radial: true },
+      { id: '540/65R30', met: [540, 65, 30], radial: true }
+    ],
+    note: 'Geometry is nominal. Overall diameter of conventional tyres = rim + 2·0.85·section width. Replace with manufacturer rolling-circumference data for design work.'
+  };
+
+
+  /* ---- Kim et al. 2022: layer data (0–50, 50–100, 100–150, 150–200 mm) used by the "load field case" button ---- */
+  D.KIM_LAYERS = {
+    'kim-sl': { tex: [68, 20, 12], CI: [560.45, 725.33, 810.29, 879.3],  w: [15.52, 18.07, 19.6, 19.45], BD: [1544, 1644, 1688, 1800], tau: [23.8, 28.75, 36.07, 41.43] },
+    'kim-l':  { tex: [40, 48, 12], CI: [471.2, 563.14, 655.3, 1798.1],  w: [32.2, 34.1, 28.4, 24.5],   BD: [1519, 1614, 1662, 1898], tau: [23.9, 30.87, 32.9, 78.4] },
+    'kim-cl': { tex: [40, 28, 32], CI: [680.8, 900.6, 1012.6, 1915.5],  w: [26.56, 23.8, 22.49, 20.24], BD: [1899, 1905, 1955, 2021], tau: [64.83, 63.36, 58.49, 87.74] }
+  };
+
+  /* ---- Tractor library. 'indicative' = typical class values (NOT a specific model); replace with weighed axle loads. ---- */
+  D.TRACTORS = [
+    { id: 'mini2',   label: 'Mini 2WD, ~15 kW (indicative)',            kW: 15, drive: '2wd', mass: 750,  fr: 62, wb: 1.45, hd: 0.40, rear: '8.00-18', front: '2wd|5.00-15', inflR: 110, inflF: 220, status: 'indicative' },
+    { id: 'compact2',label: 'Compact 2WD, ~20 kW (indicative)',         kW: 20, drive: '2wd', mass: 1100, fr: 62, wb: 1.60, hd: 0.42, rear: '9.5-24',  front: '2wd|5.00-15', inflR: 100, inflF: 220, status: 'indicative' },
+    { id: 'utility2',label: 'Utility 2WD, ~30 kW (indicative)',         kW: 30, drive: '2wd', mass: 1500, fr: 63, wb: 1.80, hd: 0.43, rear: '12.4-28', front: '2wd|6.00-16', inflR: 90,  inflF: 200, status: 'indicative' },
+    { id: 'std2',    label: 'Standard 2WD, ~37 kW (indicative)',        kW: 37, drive: '2wd', mass: 1900, fr: 65, wb: 1.95, hd: 0.45, rear: '14.9-28', front: '2wd|6.00-16', inflR: 100, inflF: 200, status: 'indicative' },
+    { id: 'std4m',   label: 'Standard MFWD, ~45 kW (indicative)',       kW: 45, drive: 'mfwd', mass: 2300, fr: 58, wb: 2.00, hd: 0.45, rear: '14.9-28', front: 'mfwd|9.5-24', inflR: 100, inflF: 150, lead: 2, status: 'indicative' },
+    { id: 'large2',  label: 'Large 2WD, ~50 kW (indicative)',           kW: 50, drive: '2wd', mass: 2400, fr: 66, wb: 2.00, hd: 0.46, rear: '16.9-30', front: '2wd|7.50-16', inflR: 100, inflF: 200, status: 'indicative' },
+    { id: 'large4m', label: 'Large MFWD, ~60 kW (indicative)',          kW: 60, drive: 'mfwd', mass: 3000, fr: 58, wb: 2.15, hd: 0.48, rear: '16.9-30', front: 'mfwd|13.6-24', inflR: 100, inflF: 140, lead: 2, status: 'indicative' },
+    { id: 'hp4m',    label: 'High-power MFWD, ~75 kW, radial (indicative)', kW: 75, drive: 'mfwd', mass: 4000, fr: 58, wb: 2.40, hd: 0.50, rear: '480/70R34', front: 'mfwd|13.6-24', inflR: 100, inflF: 140, lead: 2, status: 'indicative' },
+    { id: 'gen4',    label: 'Generic 4WD, equal tyres (v1 default)',    kW: 45, drive: '4wd', mass: 2600, fr: 50, wb: 2.10, hd: 0.45, rear: '14.9-28', front: 'same', inflR: 100, inflF: 100, status: 'indicative' },
+    { id: 'tx58',    label: 'TX58 4WD, 42 kW class (Kim et al. 2022)',  kW: 35.6, drive: '4wd', mass: 4072, fr: 60, wb: 2.155, hd: 0.50, rear: '14.9-30', front: '4wd|11.2-20', inflR: 120, inflF: 160, status: 'text: tyres, wheelbase, mass (Table 1; text says 3894 kg). ASSUMED: rear share 60 %, hitch 0.5 m, inflation', note: 'Test tractor of the Kim 2022 field data (bias tyres 14.9-30 / 11.2-20). Static axle split, hitch height and inflation are not reported — assumed.' }
+  ];
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = D; else root.TSMDATA = D;
+})(typeof window !== 'undefined' ? window : this);
+</script>
+<script>
+(function () {
+  'use strict';
+  var T = window.TSM, D = window.TSMDATA;
+  var $ = function (id) { return document.getElementById(id); };
+  var num = function (id) { var v = parseFloat($(id).value); return isNaN(v) ? null : v; };
+  var fmt = function (x, n) { return (x == null || isNaN(x)) ? '–' : x.toFixed(n == null ? 1 : n); };
+  var css = function (v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); };
+  var ref = { kim: null };           // tractor setup that calibration refers to
+
+  /* ---------- tyre lists ---------- */
+  function tyreOf(e) { var g = e.nom ? T.tyreFromNominal(e.nom[0], e.nom[1]) : T.tyreFromMetric(e.met[0], e.met[1], e.met[2]); g.radial = e.radial; g.id = e.id; return g; }
+  function fillSel(id, list, def) { var s = $(id); list.forEach(function (e, i) { var o = document.createElement('option'); o.value = i; o.textContent = e.id + (e.radial ? ' (radial)' : ' (bias)'); if (e.id === def) o.selected = true; s.appendChild(o); }); }
+  fillSel('rearTyre', D.TYRES.rear, '18.4-34'); fillSel('frontTyre', D.TYRES.front, '13.6-24');
+  var ps = $('ciPreset'); [{ label: '— custom —', CI: null }].concat(D.CI_CLASSES).concat(D.KIM_CASES.map(function (k) { return { label: k.label + ' (CI ' + k.CI + ')', CI: k.CI }; })).forEach(function (p) { var o = document.createElement('option'); o.textContent = p.label; o.value = p.CI == null ? '' : p.CI; ps.appendChild(o); });
+  var bs = $('bekSel'); D.BEKKER.forEach(function (b, i) { var o = document.createElement('option'); o.value = i; o.textContent = b.label; if (i === 1) o.selected = true; bs.appendChild(o); });
+
+  /* ---------- state ---------- */
+  function cfg() {
+    var r = tyreOf(D.TYRES.rear[+$('rearTyre').value]), f = tyreOf(D.TYRES.front[+$('frontTyre').value]);
+    r.infl = num('rearInfl'); f.infl = num('frontInfl');
+    var ra = num('rearArea'), fa = num('frontArea'); if (ra) r.areaM2 = ra / 1e4; if (fa) f.areaM2 = fa / 1e4;
+    return { mass: num('mass'), rearFrac: num('rearFrac'), wheelbase: num('wb'), hitchH: num('hd'), drive: $('drive').value,
+      lead: (num('lead') || 0) / 100, kp: num('kp'), lug: num('lug'), nRear: +$('nRear').value, rear: r, front: f };
+  }
+  function soil() { return { CI: num('ci'), kCI: num('kCI'), kRho: num('kRho') }; }
+
+  /* ---------- chart helper ---------- */
+  function setup(cv) { var dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight; cv.width = w * dpr; cv.height = h * dpr; var c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h); return { c: c, w: w, h: h }; }
+  function nice(a, b, n) { var s = (b - a) / n, p = Math.pow(10, Math.floor(Math.log10(s))), m = s / p; var st = (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p, t = [], v = Math.ceil(a / st - 1e-9) * st; for (; v <= b + 1e-9; v += st) t.push(+v.toFixed(10)); return t; }
+  function plot(cv, o) {
+    var S = setup(cv), c = S.c, W = S.w, H = S.h, L = 46, R = o.y2 ? 44 : 12, Tp = 12, B = 34, pw = W - L - R, ph = H - Tp - B;
+    var X = function (x) { return L + (x - o.x[0]) / (o.x[1] - o.x[0]) * pw; };
+    var Y = function (y) { var f = (y - o.y[0]) / (o.y[1] - o.y[0]); return o.yinv ? Tp + f * ph : Tp + ph - f * ph; };
+    var Y2 = o.y2 ? function (y) { return Tp + ph - (y - o.y2[0]) / (o.y2[1] - o.y2[0]) * ph; } : null;
+    c.font = '11px system-ui'; c.fillStyle = css('--mut'); c.strokeStyle = css('--line'); c.lineWidth = 1;
+    nice(o.x[0], o.x[1], 6).forEach(function (t) { c.beginPath(); c.moveTo(X(t), Tp); c.lineTo(X(t), Tp + ph); c.stroke(); c.textAlign = 'center'; c.fillText(t, X(t), Tp + ph + 14); });
+    nice(o.y[0], o.y[1], 5).forEach(function (t) { c.beginPath(); c.moveTo(L, Y(t)); c.lineTo(L + pw, Y(t)); c.stroke(); c.textAlign = 'right'; c.fillText(t, L - 4, Y(t) + 3); });
+    if (o.y2) nice(o.y2[0], o.y2[1], 5).forEach(function (t) { c.textAlign = 'left'; c.fillText(t, L + pw + 4, Y2(t) + 3); });
+    c.textAlign = 'center'; c.fillText(o.xl, L + pw / 2, H - 4);
+    c.save(); c.translate(11, Tp + ph / 2); c.rotate(-Math.PI / 2); c.fillText(o.yl, 0, 0); c.restore();
+    if (o.y2) { c.save(); c.translate(W - 6, Tp + ph / 2); c.rotate(Math.PI / 2); c.fillText(o.y2l, 0, 0); c.restore(); }
+    (o.bands || []).forEach(function (b) { c.fillStyle = b.color; c.globalAlpha = .18; var ya = Y(b.hi), yb = Y(b.lo); c.fillRect(L, ya, pw, yb - ya); c.globalAlpha = 1; });
+    (o.hl || []).forEach(function (h) { c.strokeStyle = h.color; c.setLineDash([5, 4]); c.lineWidth = 1.5; c.beginPath(); c.moveTo(L, Y(h.y)); c.lineTo(L + pw, Y(h.y)); c.stroke(); c.setLineDash([]); c.fillStyle = h.color; c.textAlign = 'left'; c.fillText(h.label, L + 4, Y(h.y) - 4); });
+    (o.vl || []).forEach(function (h) { c.strokeStyle = h.color; c.setLineDash([5, 4]); c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(h.x), Tp); c.lineTo(X(h.x), Tp + ph); c.stroke(); c.setLineDash([]); });
+    (o.lines || []).forEach(function (s) { c.strokeStyle = s.color; c.lineWidth = s.w || 2; c.setLineDash(s.dash || []); c.beginPath(); s.pts.forEach(function (p, i) { var yy = (s.axis2 ? Y2 : Y)(p[1]); i ? c.lineTo(X(p[0]), yy) : c.moveTo(X(p[0]), yy); }); c.stroke(); c.setLineDash([]); });
+    (o.dots || []).forEach(function (s) { c.fillStyle = s.hollow ? 'transparent' : s.color; c.strokeStyle = s.color; c.lineWidth = 2; s.pts.forEach(function (p) { var yy = (s.axis2 ? Y2 : Y)(p[1]); c.beginPath(); c.arc(X(p[0]), yy, s.r || 4.5, 0, 6.3); if (!s.hollow) c.fill(); c.stroke(); if (p[2]) { c.fillStyle = css('--ink'); c.textAlign = 'left'; c.fillText(p[2], X(p[0]) + 7, yy - 5); c.fillStyle = s.hollow ? 'transparent' : s.color; } }); });
+    c.strokeStyle = css('--mut'); c.strokeRect(L, Tp, pw, ph);
+  }
+  function legend(id, items) { $(id).innerHTML = items.map(function (i) { return '<i style="border-color:' + i[0] + (i[2] ? ';border-top-style:dashed' : '') + '"></i>' + i[1]; }).join(''); }
+
+  /* ---------- core evaluation ---------- */
+  var last = {};
+  function update() {
+    var C = cfg(), S = soil(), DP = num('dp'), v = num('speed') || 7;
+    $('ciV').textContent = S.CI + ' kPa'; $('dpV').textContent = fmt(DP, 1) + ' kN';
+    var sol = T.solveForDraft(C, S, DP), alerts = [];
+    var cap = T.curve(C, S, 120, 0.45), maxPull = Math.max.apply(null, cap.map(function (p) { return p.pull; }));
+    var res = sol.ok ? sol.res : null;
+    var opt = T.optimum(C, S);
+    var cal = (S.kCI !== 1 || S.kRho !== 1);
+    $('calBadge').innerHTML = cal ? '<span class="badge b-warn">Calibrated κ<sub>CI</sub>=' + fmt(S.kCI, 2) + ', κ<sub>ρ</sub>=' + fmt(S.kRho, 2) + '</span>' : '<span class="badge b-bad">Textbook (uncalibrated)</span>';
+    $('calNote').textContent = cal ? ' Factors absorb unmeasured axle loads, tyre deformation, tillage-induced soil state and test definitions — valid for the tractor/soil they were fitted on.' : ' Kim et al. (2022) measured 45–60 % higher slip than this textbook model on three soils — consider calibrating (panel 3).';
+    if (!sol.ok) alerts.push(['bad', 'Required pull (' + fmt(DP, 1) + ' kN) exceeds the traction capacity of this tractor on this soil (max ≈ ' + fmt(maxPull, 1) + ' kN). Increase ballast, reduce draft, or use 4WD.']);
+    else if (res.sR > 0.25) alerts.push(['warn', 'Rear slip above 25 %: outside the range where the traction equations and compaction law are validated; tractive efficiency is poor.']);
+    if (S.CI < 400 || S.CI > 2200) alerts.push(['warn', 'Cone index outside 400–2200 kPa: extrapolation beyond typical D497.7 data.']);
+    if (cal && ref.kim && (C.mass !== ref.kim.mass || C.drive !== ref.kim.drive)) alerts.push(['warn', 'κ values come from a different tractor (TX58 4WD, Kim 2022); treat results as indicative only.']);
+    var Rc = res ? res.R.contact : T.tractorAt(C, S, 0, 0.1).R.contact, Rtyre = res ? res.R : T.tractorAt(C, S, 0, 0.1).R;
+    var ax = res ? res.ax : T.axleLoads(C, DP);
+    var pw = ax.Wr / (C.nRear), p = Rc.pc, A = Rc.A;
+    var nu = +$('nu').value, strength = num('strength');
+    var sc = T.scsi(p, A, nu, strength), scHi = T.scsi(p, A, 6, strength), scLo = T.scsi(p, A, 3, strength);
+    if (sc.scsi > 1) alerts.push(['bad', 'SCSI = ' + fmt(sc.scsi, 2) + ' > 1: subsoil stress at 0.5 m exceeds the strength limit (' + strength + ' kPa) — risk of chronic subsoil compaction (Keller & Or 2022).']);
+    else if (scHi.scsi > 1) alerts.push(['warn', 'SCSI ≤ 1 for ν=' + nu + ' but > 1 for ν=6 (wet/soft soil): risk depends on soil moisture.']);
+    $('alerts').innerHTML = alerts.map(function (a) { return '<div class="alert ' + a[0] + '">' + a[1] + '</div>'; }).join('');
+    var Pdb = DP * v / 3.6;
+    var k = [
+      ['Rear slip', res ? fmt(res.sR * 100, 1) + ' %' : '—', 'optimum ' + fmt(opt.s * 100, 1) + ' % (TE ' + fmt(opt.te, 2) + ')'],
+      ['Tractive efficiency', res ? fmt(res.te, 2) : '—', 'wheel TE, = DP·v / axle input power'],
+      ['Drawbar power', fmt(Pdb, 1) + ' kW', res ? 'axle input ≈ ' + fmt(Pdb / res.te, 1) + ' kW' : ''],
+      ['Pull / weight', res ? fmt(DP / ax.W, 2) : '—', 'max on this soil ' + fmt(maxPull / ax.W, 2)],
+      ['Rear contact pressure', fmt(p, 0) + ' kPa', 'net A = ' + fmt(A * 1e4, 0) + ' cm² per wheel, δ/h = ' + fmt(Rc.dh, 2)],
+      ['SCSI @0.5 m', fmt(sc.scsi, 2), 'σ = ' + fmt(sc.stress, 0) + ' kPa (ν=' + nu + ')'],
+      ['Wheel numeric Bn', fmt(Rtyre.br.Bn, 1), 'rear, per wheel']];
+    $('kpis').innerHTML = k.map(function (x) { return '<div class="kpi"><span>' + x[0] + '</span><b>' + x[1] + '</b><span>' + x[2] + '</span></div>'; }).join('');
+    last = { C: C, S: S, DP: DP, sol: sol, res: res, opt: opt, sc: sc, cap: cap };
+
+    /* chart 1: TE & pull ratio vs slip (calibrated = current κ, textbook dashed) */
+    var tb = T.curve(C, { CI: S.CI, kCI: 1, kRho: 1 }, 100, 0.4), cu = T.curve(C, S, 100, 0.4);
+    var lines = [{ pts: cu.map(function (q) { return [q.s * 100, q.te]; }), color: css('--acc'), w: 2.5 },
+                 { pts: cu.map(function (q) { return [q.s * 100, q.ratio]; }), color: css('--blue'), w: 2.5, axis2: true }];
+    if (cal) { lines.push({ pts: tb.map(function (q) { return [q.s * 100, q.te]; }), color: css('--acc'), dash: [5, 4], w: 1.5 }, { pts: tb.map(function (q) { return [q.s * 100, q.ratio]; }), color: css('--blue'), dash: [5, 4], w: 1.5, axis2: true }); }
+    var dots = [];
+    if (res) dots.push({ pts: [[res.sR * 100, res.te, 'operating']], color: css('--acc2'), r: 6 });
+    var fk = D.KIM_CASES.map(function (c) { return [c.slip, c.te, c.soil]; });
+    dots.push({ pts: fk, color: css('--ink'), hollow: true, r: 5 });
+    if ($('showMas').checked) { var eta = num('etaD') || .88; dots.push({ pts: D.MASIERO_SURFACES.map(function (m) { return [m.slip_pct, m.eff_pct / 100 / eta, m.surface]; }), color: css('--acc2'), hollow: true, r: 4 }); }
+    plot($('c1'), { x: [0, 40], y: [0, 1], y2: [0, 0.8], xl: 'Rear-wheel slip, %', yl: 'Tractive efficiency', y2l: 'Net pull / tractor weight', lines: lines, dots: dots, vl: [{ x: opt.s * 100, color: css('--mut') }] });
+    legend('l1', [[css('--acc'), 'TE'], [css('--blue'), 'pull/weight'], [css('--mut'), 'textbook (κ=1)', 1], [css('--ink'), '○ Kim 2022 field points (Kim tractor only!)'], [css('--acc2'), '● operating point']]);
+
+    /* chart 2: stress vs depth */
+    var prof = function (n) { return T.stressProfile(p, A, n, 1.0).map(function (q) { return [q.s, q.z]; }); };
+    var cvs = $('c2'), S2 = setup(cvs);
+    // draw depth on y (inverted): use plot with swapped axes via transformed coordinates
+    var lo = prof(3), hi = prof(6), md = prof(nu);
+    plot(cvs, { x: [0, Math.ceil(p / 50) * 50], y: [0, 1], xl: 'Vertical stress on axis, kPa', yl: 'Depth z, m', yinv: true, lines: [
+      { pts: lo.map(function (q) { return [q[0], q[1]]; }), color: css('--blue'), dash: [4, 4], w: 1.5 },
+      { pts: hi.map(function (q) { return [q[0], q[1]]; }), color: css('--blue'), dash: [4, 4], w: 1.5 },
+      { pts: md.map(function (q) { return [q[0], q[1]]; }), color: css('--acc'), w: 2.5 }],
+      vl: [{ x: strength, color: css('--bad') }], hl: [{ y: 0.5, color: css('--mut'), label: 'SCSI depth 0.5 m' }],
+      dots: [{ pts: [[sc.stress, 0.5, fmt(sc.stress, 0) + ' kPa']], color: css('--acc2'), r: 5 }] });
+    legend('l2', [[css('--acc'), 'ν = ' + nu], [css('--blue'), 'ν = 3 and 6 bounds', 1], [css('--bad'), strength + ' kPa subsoil limit']]);
+
+    /* chart 3: axle loads and traction split (bars) */
+    drawBars(res || T.tractorAt(C, S, 0, 0.1), C);
+
+    /* chart 4: compaction */
+    drawCompaction(C, Rc);
+    renderValidation(); renderBek(C); renderAD();
+    last.ready = true;
+  }
+
+  function drawBars(r, C) {
+    var S = setup($('c3')), c = S.c, W = S.w, H = S.h, items = [
+      ['Rear static', C.rearFrac * r.ax.W, 'a'], ['Rear dynamic', r.ax.Wr, 'b'], ['Front static', (1 - C.rearFrac) * r.ax.W, 'a'], ['Front dynamic', r.ax.Wf, 'b'],
+      ['Rear gross traction', r.R.gross, 'c'], ['Rear rolling res.', r.R.roll, 'd'], ['Front gross traction', r.F.gross, 'c'], ['Front rolling res.', r.F.roll, 'd']];
+    var mx = Math.max.apply(null, items.map(function (i) { return i[1]; })) * 1.12, bw = (W - 60) / items.length;
+    var col = { a: css('--mut'), b: css('--blue'), c: css('--acc'), d: css('--acc2') };
+    c.font = '11px system-ui'; c.textAlign = 'center';
+    items.forEach(function (it, i) { var h = (H - 70) * it[1] / mx, x = 50 + i * bw + 4; c.fillStyle = col[it[2]]; c.fillRect(x, H - 40 - h, bw - 8, h); c.fillStyle = css('--ink'); c.fillText(fmt(it[1], 1), x + (bw - 8) / 2, H - 44 - h); c.fillStyle = css('--mut'); var w = it[0].split(' '); c.fillText(w[0], x + (bw - 8) / 2, H - 26); c.fillText(w.slice(1).join(' '), x + (bw - 8) / 2, H - 14); });
+    c.save(); c.translate(11, H / 2); c.rotate(-Math.PI / 2); c.fillStyle = css('--mut'); c.fillText('kN', 0, 0); c.restore();
+    legend('l3', [[css('--mut'), 'static axle load'], [css('--blue'), 'with draft load transfer (ΔW = DP·h/WB = ' + fmt(r.ax.dW, 2) + ' kN)'], [css('--acc'), 'gross traction'], [css('--acc2'), 'rolling resistance']]);
+  }
+
+  function drawCompaction(C, Rc) {
+    var V = D.VALERA_PASSES, fit = T.fitLog(V.N.slice(1), V.gamma.slice(1)), rr = (C.rear.infl) / 110;
+    var N = parseInt($('passes').value) || 5, pts = [], ptsRef = [];
+    for (var n = 1; n <= 30; n += 0.5) { pts.push([n, fit.a + fit.b * Math.log10(n * rr)]); ptsRef.push([n, fit.a + fit.b * Math.log10(n)]); }
+    var yv = fit.a + fit.b * Math.log10(N * rr);
+    plot($('c4'), { x: [0, 30], y: [1100, 1500], xl: 'Passes in the same track', yl: 'Surface dry density, kg/m³',
+      lines: [{ pts: ptsRef, color: css('--mut'), dash: [5, 4], w: 1.5 }, { pts: pts, color: css('--acc'), w: 2.5 }],
+      dots: [{ pts: V.N.slice(1).map(function (n, i) { return [n, V.gamma[i + 1]]; }), color: css('--ink'), hollow: true }, { pts: [[N, yv, fmt(yv, 0)]], color: css('--acc2'), r: 6 }], hl: [{ y: V.gamma[0], color: css('--mut'), label: 'untrafficked 1136' }] });
+    legend('l4', [[css('--ink'), '○ Valera 2012 clay, 4WD tractor'], [css('--mut'), 'log fit ' + fmt(fit.b, 0) + ' kg/m³ per decade', 1], [css('--acc'), 'shifted by rear inflation / 110 kPa (assumption)']]);
+  }
+
+  function renderValidation() {
+    var C = last.C, h = '<table><tr><th>Soil</th><th>CI</th><th>DP kN</th><th>Meas. slip %</th><th>Textbook slip</th><th>Current-κ slip</th><th>Meas. TE</th><th>Textbook TE</th><th>Current-κ TE</th></tr>';
+    D.KIM_CASES.forEach(function (k) { var a = T.predictCase(C, k, 1, 1), b = T.predictCase(C, k, last.S.kCI, last.S.kRho); h += '<tr><td>' + k.soil + '</td><td>' + k.CI + '</td><td>' + k.DP + '</td><td>' + k.slip + ' ± ' + k.slipSd + '</td><td>' + fmt(a.slip) + '</td><td>' + fmt(b.slip) + '</td><td>' + k.te + '</td><td>' + fmt(a.te, 2) + '</td><td>' + fmt(b.te, 2) + '</td></tr>'; });
+    $('valTab').innerHTML = h + '</table>';
+    $('valNote').innerHTML = 'Meaningful only when the tractor panel matches the TX58 (use “Load Kim TX58 setup”). Kim did not report static axle loads, tyre inflation or hitch height, so these are assumptions (rear share 0.60, 120/160 kPa, 0.5 m). Note the clay loam has the <i>highest</i> CI yet the <i>highest</i> slip: CI alone does not capture wet, plastic soils.';
+  }
+  function renderBek() {
+    var b = D.BEKKER[+$('bekSel').value], s = (num('bekS') || 15) / 100, C = last.C, r = last.res || T.tractorAt(C, last.S, 0, .1), W = r.ax.Wr / C.nRear;
+    var q = T.bekkerWheel(b, C.rear.b, C.rear.d, W, s), br = r.R.br;
+    $('bekOut').innerHTML = '<table><tr><th></th><th>Sinkage z₀ (mm)</th><th>μ (thrust/W)</th><th>ρ (resistance/W)</th><th>net coeff.</th></tr><tr><td>Bekker–Wong rigid wheel (' + b.label + ')</td><td>' + fmt(q.z0 * 1000, 0) + '</td><td>' + fmt(q.mu, 2) + '</td><td>' + fmt(q.rho, 3) + '</td><td>' + fmt(q.mu - q.rho, 2) + '</td></tr><tr><td>Brixius (current κ, slip ' + fmt(s * 100, 0) + '%)</td><td>–</td><td>' + fmt(T.brixius({ CI: last.S.CI, kCI: last.S.kCI, kRho: last.S.kRho, b: C.rear.b, d: C.rear.d, W: W, s: s, dh: r.R.contact.dh, radial: C.rear.radial }).mu, 2) + '</td><td>' + fmt(T.brixius({ CI: last.S.CI, kCI: last.S.kCI, kRho: last.S.kRho, b: C.rear.b, d: C.rear.d, W: W, s: s, dh: r.R.contact.dh, radial: C.rear.radial }).rho, 3) + '</td><td>–</td></tr></table><div class="note">Rigid-wheel theory over-estimates resistance for inflated tyres (tyre deflection flattens the contact patch) and uses wheel terrain constants (n, k<sub>c</sub>, k<sub>φ</sub>, c, φ, K) rather than cone index. Use it as an independent order-of-magnitude check, not a replacement. Terrain constants are textbook values (status: recalled — verify against your copy of Wong).</div>';
+  }
+  function renderAD() {
+    var e = D.ALDOSARY.eq[$('adImp').value], PD = num('adPD'), PS = num('adPS'), MC = num('adMC'), STI = num('adSTI'), dm = D.ALDOSARY.domain;
+    var slip = e.c + e.pd * PD + e.mc * MC + e.ps * PS + e.sti * STI;
+    var out = PD < dm.depth_cm[0] || PD > dm.depth_cm[1] || PS < dm.speed_kmh[0] || PS > dm.speed_kmh[1] || MC < dm.mc_pctdb[0] || MC > dm.mc_pctdb[1] || STI < dm.STI[0] || STI > dm.STI[1];
+    $('adOut').innerHTML = '<b>Estimated rear slip: ' + fmt(slip, 1) + ' %</b> (RMSE ' + e.rmse + ' %, R² ' + e.R2 + ') ' + (out ? '<span class="badge b-bad">outside validated domain</span>' : '<span class="badge b-ok">inside domain</span>') + '<div class="note">Valid only for: ' + D.ALDOSARY.tractor + '; depth ' + dm.depth_cm.join('–') + ' cm, speed ' + dm.speed_kmh.join('–') + ' km/h, moisture ' + dm.mc_pctdb.join('–') + ' %db, STI ' + dm.STI.join('–') + '. A regression for that tractor — never extrapolate to other tractors.</div>';
+  }
+
+  /* ---------- static panels ---------- */
+  function renderEvidence() {
+    var h = '<table><tr><th>Source</th><th>Used for</th><th>Verification status</th></tr>';
+    var use = { kim2022: 'Field validation & calibration (3 soils)', masiero2011: 'Surface-class efficiency overlay', aldosary2023: 'Case-specific slip estimator', valera2012: 'Density-vs-passes law', kukharets2025: 'Tyre contact-area/stress check (tests)', keller2022: 'Subsoil stress, SCSI, 50 kPa limit', brixius1987: 'Wheel-numeric traction equations', mckyes1985: 'Raghavan compaction form', wong2010: 'Bekker–Wong cross-check, terrain constants', thorpe2024: 'Reviewed, not used (inconsistent table)', asabe497: 'Cone-index classes' };
+    Object.keys(D.SOURCES).forEach(function (k) { var s = D.SOURCES[k]; h += '<tr><td class="l">' + s.cite + (s.doi ? ' <a href="https://doi.org/' + s.doi + '" target="_blank" rel="noopener">DOI</a>' : '') + '</td><td class="l">' + (use[k] || '') + '</td><td class="l">' + s.status + '</td></tr>'; });
+    $('evid').innerHTML = h + '</table><div class="note">“text” = number read from the article/book text. “recalled” = standard literature value not re-checked against a copy. Items an article did not report are left blank in the data file instead of being guessed.</div>';
+  }
+  function renderEq() {
+    $('eqs').innerHTML = '<details open><summary>Traction (Brixius 1987 / ASABE D497.7)</summary><pre>Bn = (CI·b·d / W) · (1 + 5δ/h) / (1 + 3b/d)         W = load per wheel (kN), CI (kPa) × κCI\nBias :  μg = 0.88 (1−e^−0.1Bn)(1−e^−7.5s) + 0.04     ρ = 1/Bn + 0.04   + 0.5 s/√Bn\nRadial: μg = 0.88 (1−e^−0.1Bn)(1−e^−9.5s) + 0.0325   ρ = 0.9/Bn + 0.0325 + 0.5 s/√Bn\nρ ← κρ·ρ ;  NTR = W(μg − ρ) ;  wheel TE = (NTR/GTR)(1 − s)</pre></details>' +
+    '<details><summary>Whole tractor</summary><pre>ΔW = DP·h_d / WB ;  W_rear = W_r0 + ΔW ; W_front = W_f0 − ΔW\nFront slip: s_F = 1 − (1 − s_R)/(1 + lead)  (MFWD/4WD) ; 2WD front wheels are free-rolling\nDP = Σ axle NTR ;   TE = DP / Σ [ GTR_ax / (1 − s_ax) ]</pre></details>' +
+    '<details><summary>Contact patch &amp; stress</summary><pre>A = W / (kp·p_i) (or measured) ;  L = A/(π b/4) ;  δ = d/2 [1 − √(1 − (L/d)²)]\nσ_z = p [1 − ( z²/(a²+z²) )^(ν/2)] , a = √(A/π)   (ν = 3 → Boussinesq)\nSCSI = σ_z(0.5 m) / strength(0.5 m) ; > 1 → chronic subsoil compaction risk</pre></details>' +
+    '<details><summary>Bekker–Wong (rigid wheel)</summary><pre>p = (kc/b + kφ) z^n ;  z0 = [3W / ((3−n)(kc/b+kφ)√d)]^(2/(2n+1))\nRc = b(kc/b+kφ) z0^(n+1)/(n+1) ;  H = (A c + W tanφ)[1 − (K/(sL))(1 − e^(−sL/K))]</pre></details>' +
+    '<details><summary>Compaction</summary><pre>Raghavan et al. 1977 (McKyes 1985 Eq. 5.1):  γd = γ0 + A1 log(N·p) + B1 log(w%)  (w below optimum)\nHere: γd(N) = a + b log10(N·r) fitted to Valera et al. 2012 clay data; r = rear inflation/110 kPa (assumption)</pre></details>';
+  }
+
+  /* ---------- calibration actions ---------- */
+  function kimCfg() { var K = D.TRACTOR_KIM, r = T.tyreFromNominal(K.rear.nominal[0], K.rear.nominal[1]), f = T.tyreFromNominal(K.front.nominal[0], K.front.nominal[1]); r.infl = 120; f.infl = 160; r.radial = f.radial = false; return { mass: 4072, rearFrac: .6, wheelbase: K.wheelbase, hitchH: .5, drive: '4WD', lead: 0, kp: 1.3, lug: 0.6, nRear: 2, rear: r, front: f }; }
+  function kimFactors() { var cf = kimCfg(), fs = D.KIM_CASES.map(function (c) { return T.fitCase(cf, c); }); return { kCI: fs.reduce(function (a, f) { return a + f.kCI; }, 0) / 3, kRho: fs.reduce(function (a, f) { return a + f.kRho; }, 0) / 3, each: fs }; }
+  function setSel(id, val) { var s = $(id); for (var i = 0; i < s.options.length; i++) if (s.options[i].text.indexOf(val) === 0) { s.selectedIndex = i; return; } }
+  $('kText').onclick = function () { $('kCI').value = 1; $('kRho').value = 1; update(); };
+  $('kKim').onclick = function () { var k = kimFactors(); $('kCI').value = k.kCI.toFixed(2); $('kRho').value = k.kRho.toFixed(2); ref.kim = kimCfg(); $('fitOut').textContent = 'Mean of three Kim soils: ' + k.each.map(function (f, i) { return D.KIM_CASES[i].soil + ' κCI ' + f.kCI.toFixed(2) + '/κρ ' + f.kRho.toFixed(2); }).join('; ') + '. n = 3 → indicative only.'; update(); };
+  $('loadKim').onclick = function () {
+    $('mass').value = 4072; $('rearFrac').value = .6; $('wb').value = 2.155; $('hd').value = .5; $('drive').value = '4WD'; $('lead').value = 0; setSel('rearTyre', '14.9-30'); setSel('frontTyre', '11.2-20'); $('rearInfl').value = 120; $('frontInfl').value = 160; $('nRear').value = 2; $('kp').value = 1.3; $('rearArea').value = ''; $('frontArea').value = '';
+    $('csv').value = 'CI,DP,slip,TE\n' + D.KIM_CASES.map(function (k) { return [k.CI, k.DP, k.slip, k.te].join(','); }).join('\n'); ref.kim = kimCfg(); update();
+  };
+  $('fit').onclick = function () {
+    var rows = $('csv').value.split(/\n/).map(function (l) { return l.split(/[,;\t]/).map(parseFloat); }).filter(function (r) { return r.length >= 3 && r.slice(0, 3).every(function (x) { return !isNaN(x); }); });
+    if (!rows.length) { $('fitOut').textContent = 'No valid rows found (need CI, DP, slip[, TE]).'; return; }
+    var C = cfg(), cases = rows.map(function (r, i) { return { label: 'row ' + (i + 1), CI: r[0], DP: r[1], slip: r[2], te: isNaN(r[3]) ? null : r[3] }; }), kc, kr, msg;
+    if (cases.length < 3) { var fs = cases.map(function (c) { return T.fitCase(C, c); }); kc = fs.reduce(function (a, f) { return a + f.kCI; }, 0) / fs.length; kr = fs.reduce(function (a, f) { return a + f.kRho; }, 0) / fs.length; msg = 'Mean of ' + cases.length + ' per-case fit(s).'; }
+    else { var cal = T.calibrate(C, cases); kc = cal.kCI; kr = cal.kRho; msg = 'Global fit over ' + cases.length + ' cases: RMS slip error ' + fmt(cal.rmsSlip, 1) + ' pts' + (cal.rmsSlip > 2.5 ? ' — large; factors are probably soil-specific, fit each soil separately.' : '.'); }
+    $('kCI').value = kc.toFixed(2); $('kRho').value = kr.toFixed(2); $('fitOut').textContent = msg + ' κCI = ' + kc.toFixed(2) + ', κρ = ' + kr.toFixed(2) + '.'; ref.kim = C; update();
+  };
+  $('ciPreset').onchange = function () { if (this.value) { $('ci').value = this.value; update(); } };
+  ['mass', 'rearFrac', 'wb', 'hd', 'drive', 'lead', 'rearTyre', 'nRear', 'rearInfl', 'rearArea', 'frontTyre', 'frontInfl', 'frontArea', 'kp', 'ci', 'dp', 'speed', 'nu', 'strength', 'passes', 'kCI', 'kRho', 'showMas', 'etaD', 'bekSel', 'bekS', 'adImp', 'adPD', 'adPS', 'adMC', 'adSTI'].forEach(function (id) { $(id).addEventListener('input', update); $(id).addEventListener('change', update); });
+  $('ci').addEventListener('input', function () { $('ciPreset').selectedIndex = 0; });
+  window.addEventListener('resize', update);
+  renderEvidence(); renderEq(); update();
+  window.__TSM_APP = { update: update, last: function () { return last; } };
+})();
+</script>
+</body></html>
