@@ -1,1 +1,1 @@
-{"name":"tractor-soil-simulator-advanced","version":"3.0.0","license":"MIT","scripts":{"test":"node tests/run.js","build":"node build.js"}}
+{"name":"tractor-soil-simulator-advanced","version":"2.0.0","license":"MIT","scripts":{"test":"node tests/run.js","build":"node build.js"}}

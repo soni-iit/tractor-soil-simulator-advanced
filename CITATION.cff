@@ -1,9 +1,14 @@
 cff-version: 1.2.0
-title: "Tractor–Soil Interaction Simulator v2 Advanced (v3)"
+message: "If you use this software, please cite it using the metadata below (and the basic-version record 10.5281/zenodo.23560841 if relevant)."
+title: "Tractor–Soil Interaction Simulator v2 Advanced"
+type: software
 authors:
   - family-names: Soni
     given-names: Peeyush
-    affiliation: "IIT Kharagpur"
+    affiliation: "Indian Institute of Technology Kharagpur"
 license: MIT
-version: 3.0.0
-message: "If you use this software, please cite it (and the v1 Zenodo record 10.5281/zenodo.23560841 if relevant)."
+version: v2.0
+date-released: 2026-10-22
+doi: 10.5281/zenodo.23571067
+repository-code: "https://github.com/soni-iit/tractor-soil-simulator-advanced"
+url: "https://soni-iit.github.io/tractor-soil-simulator-advanced/"

@@ -1,4 +1,8 @@
-# Tractor–Soil Interaction Simulator — Advanced (v3)
+# Tractor–Soil Interaction Simulator v2 Advanced
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23571067.svg)](https://doi.org/10.5281/zenodo.23571067)
+
+**Live:** https://soni-iit.github.io/tractor-soil-simulator-advanced/ · **Basic version:** https://soni-iit.github.io/tractor-soil-simulator/
 
 Complete, offline, single-file simulator that extends the basic version (https://soni-iit.github.io/tractor-soil-simulator/) with field-calibrated physics.
 **Author:** Peeyush Soni, Dept. of Agricultural & Food Engineering, IIT Kharagpur · **Licence:** MIT
@@ -19,6 +23,13 @@ USDA texture triangle (click/drag) · typical Indian regions with state map for 
 | Cross-checks | Bekker–Wong rigid-wheel theory; Al-Dosary 2023 slip regression with domain-of-validity flag |
 | Provenance | Evidence table: DOI and verification status for every source |
 | Workflow | CSV slip-sweep export, scenario save/load (JSON), print/PDF |
+
+## How to cite
+Version v2.0 (this release):
+
+> Soni, P. (2026). *Tractor–Soil Interaction Simulator v2 Advanced* (Version v2.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23571068
+
+All versions (concept DOI): https://doi.org/10.5281/zenodo.23571067 · Basic version: https://doi.org/10.5281/zenodo.23560841
 
 ## Files
 * `index.html` — the advanced simulator (open by double-click; works offline).

@@ -182,7 +182,7 @@ footer{color:var(--muted);font-size:12px;max-width:100ch}
 <header>
   <div>
     <h1>Tractor–Soil Interaction Simulator <span class="tag" style="vertical-align:middle">Advanced</span></h1>
-    <div class="byline">Peeyush Soni · Department of Agricultural and Food Engineering, IIT Kharagpur · <a href="https://doi.org/10.5281/zenodo.23560841" target="_blank" rel="noopener">DOI 10.5281/zenodo.23560841</a></div>
+    <div class="byline">Peeyush Soni · Department of Agricultural and Food Engineering, IIT Kharagpur · <a href="https://doi.org/10.5281/zenodo.23571067" target="_blank" rel="noopener">DOI 10.5281/zenodo.23571067</a></div>
   </div>
   <p>Pick a tractor and tyres, set the soil from texture, moisture and a measured cone-index profile, then run the model with a chosen slip or a required drawbar pull. Results are shown for one wheel and for the whole tractor, checked against published field data and calibratable to your own tests.</p>
 </header>
@@ -533,7 +533,7 @@ footer{color:var(--muted);font-size:12px;max-width:100ch}
 </div>
 <div class="cite">
   <h2>How to cite</h2>
-  <p id="citetext">Soni, P. (2026). Tractor–Soil Interaction Simulator, Advanced version 3 [Computer software]. Based on the basic version: Zenodo. https://doi.org/10.5281/zenodo.23560841</p>
+  <p id="citetext">Soni, P. (2026). Tractor–Soil Interaction Simulator v2 Advanced (Version v2.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.23571068</p>
   <p>Author: Peeyush Soni, Department of Agricultural and Food Engineering, Indian Institute of Technology Kharagpur. Released under the MIT licence. Source code: <a href="https://github.com/soni-iit/tractor-soil-simulator" target="_blank" rel="noopener">github.com/soni-iit/tractor-soil-simulator</a>.</p>
   <button type="button" id="copycite">Copy citation</button>
 </div>
@@ -2265,7 +2265,7 @@ Engineering estimate calibrated to a small set of published field trials (see th
   }
   var SKEYS = ["sand","silt","clay","moist","load","slip","speed","mass","fr","wb","hd","lead","inflR","inflF","dpTarget","strength","passes","kCI","kRho","kp","lug","adPD","adPS","adMC","adSTI","etaD","bekS"];
   function scenario(){
-    var S = readState(), o = {app:"Tractor-Soil Simulator Advanced", version:"3.0.0", drive:S.drive, rearTyre:S.rearTyre, frontTyre:S.frontTyre, cond:S.cond, wheel:S.wheel, mode:S.mode, autoload:S.autoload, useCI:S.useCI, ci:S.ci, csv:$("csv").value};
+    var S = readState(), o = {app:"Tractor-Soil Simulator Advanced", version:"2.0", drive:S.drive, rearTyre:S.rearTyre, frontTyre:S.frontTyre, cond:S.cond, wheel:S.wheel, mode:S.mode, autoload:S.autoload, useCI:S.useCI, ci:S.ci, csv:$("csv").value};
     SKEYS.forEach(function(k){ o[k] = $(k).value; });
     return o;
   }
@@ -2292,7 +2292,7 @@ Engineering estimate calibrated to a small set of published field trials (see th
   });
   $("expCsv").addEventListener("click", function(){
     var S = readState(), soil = soilFor(S, S.cond), now = {kCI:CAL.kCI, kRho:CAL.kRho};
-    var hdr = ["# Tractor-Soil Simulator Advanced v3.0.0 slip sweep", "# "+new Date().toISOString(),
+    var hdr = ["# Tractor-Soil Simulator Advanced v2.0 slip sweep", "# "+new Date().toISOString(),
       "# drive="+S.drive+" rear="+S.rear.label+" front="+S.front.label+" mass_kg="+S.mass+" rear_static_pct="+S.fr+" wheelbase_m="+S.wb+" hitch_m="+S.hd+" lead_pct="+S.lead+" infl_rear_kPa="+S.inflR+" infl_front_kPa="+S.inflF,
       "# sand/silt/clay="+S.sand+"/"+S.silt+"/"+S.clay+" moisture_pct="+S.moist+" condition="+S.cond+" CI_kPa="+fmt(ciOf(soil,S.moist),0),
       "# kCI="+CAL.kCI+" kRho="+CAL.kRho+" kp="+CAL.kp+" lug="+CAL.lug, "slip_pct,DP_kN,DP_over_W,TE_whole_tractor,DP_textbook_kN,TE_textbook"];
